@@ -7,7 +7,7 @@
 
 ## What This Project Does
 
-Pulls every address from the **BURIAL MASTER LIST** Google Sheet (two tabs: TEMPORARY LOCATES and BURY / DWB), geocodes them, and generates interactive Leaflet HTML maps hosted on GitHub Pages. Maps update automatically every morning at 6 AM CST via GitHub Actions — no laptop required.
+Pulls every address from the **BURIAL MASTER LIST** Google Sheet (two tabs: TEMPORARY LOCATES and BURY / DWB), geocodes them, and generates interactive Leaflet HTML maps hosted on GitHub Pages. Maps update automatically every hour via GitHub Actions — no laptop required.
 
 **Live URLs**
 | Page | URL |
@@ -23,7 +23,7 @@ Pulls every address from the **BURIAL MASTER LIST** Google Sheet (two tabs: TEMP
 ```
 Google Sheets (BURIAL MASTER LIST)
   ↓  gspread + Service Account
-generate_map.py  (GitHub Actions — cron 0 11 * * * = 6 AM CST + manual dispatch)
+generate_map.py  (GitHub Actions — cron 0 * * * * = every hour + manual dispatch)
   ↓  Geocoder waterfall: Google Maps API → Census → Nominatim
   ↓  cache/geocode_cache.json  (persisted across runs via actions/cache@v4)
 docs/map-*.html + docs/index.html + docs/metadata.json
@@ -108,11 +108,15 @@ These must be set at **Settings → Secrets and variables → Actions** in the r
 
 ---
 
-## Map Features (v1.0.0)
+## Map Features (v1.0.1)
 
 - **Hover** over any dot → tooltip shows address + city; dashed lines draw to nearest 5 neighbors
-- **Click** any dot → full proximity coloring (green = 5 closest, yellow = 6–15, red = 16+), solid lines to nearest 15, popup with address + Google Maps link
+- **Click** any dot → full proximity coloring, solid lines to nearest 15, popup with address + Google Maps link
 - **Click again** or click map background → reset
+- **Proximity Mode toggle** (bottom-left legend):
+  - *By Count* — green = 5 closest, yellow = 6–15, red = 16+
+  - *By Distance* — choose radius (10 / 25 / 50 mi); green = within radius, yellow = within 2× radius, red = beyond
+- **Completed jobs excluded** — rows highlighted `#00ff00` (neon green) in the sheet are filtered out of the map entirely
 - **Dark theme** throughout; CARTO Voyager base tiles
 
 ---
@@ -146,3 +150,4 @@ python3 src/generate_map.py
 | Version | Date | Notes |
 |---|---|---|
 | v1.0.0 | 2026-04-10 | Production release. GitHub Actions pipeline, Google geocoding (633-entry cache), Leaflet proximity maps, hover address tooltips |
+| v1.0.1 | 2026-04-10 | Count/Distance proximity toggle; exclude #00ff00 completed rows; hourly sync (was daily) |

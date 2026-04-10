@@ -191,8 +191,54 @@ def open_spreadsheet():
             )
         raise
 
+def _get_green_row_indices(creds, spreadsheet_id, sheet_name):
+    """Return a set of 0-based data row indices (header excluded) where ANY cell
+    has background colour #00ff00 (pure neon green = completed job)."""
+    import google.auth.transport.requests
+    try:
+        session = google.auth.transport.requests.AuthorizedSession(creds)
+        url  = f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}"
+        resp = session.get(url, params={
+            "includeGridData": "true",
+            "ranges":          sheet_name,
+            "fields":          "sheets.data.rowData.values.userEnteredFormat.backgroundColor",
+        }, timeout=20)
+        resp.raise_for_status()
+        data = resp.json()
+
+        green = set()
+        row_data = (
+            data.get("sheets", [{}])[0]
+                .get("data",   [{}])[0]
+                .get("rowData", [])
+        )
+        # rowData[0] = header row → skip; rowData[i+1] → data row index i
+        for idx, row in enumerate(row_data[1:]):
+            for cell in row.get("values", []):
+                bg = cell.get("userEnteredFormat", {}).get("backgroundColor", {})
+                r  = bg.get("red",   0.0)
+                g  = bg.get("green", 0.0)
+                b  = bg.get("blue",  0.0)
+                # #00ff00 ≡ red≈0, green≈1, blue≈0
+                if g >= 0.99 and r <= 0.01 and b <= 0.01:
+                    green.add(idx)
+                    break   # one green cell is enough to exclude the row
+        return green
+    except Exception as e:
+        print(f"    ⚠  Could not read row colours (green filter skipped): {e}")
+        return set()
+
+
 def fetch_tab(spreadsheet, gid):
     ws = spreadsheet.get_worksheet_by_id(int(gid))
+
+    # Identify completed rows (neon green #00ff00) to exclude before geocoding
+    green_indices = _get_green_row_indices(
+        spreadsheet.client.auth, SPREADSHEET_ID, ws.title
+    )
+    if green_indices:
+        print(f"    Excluding {len(green_indices)} completed (green) row(s)")
+
     all_values = ws.get_all_values()
     if not all_values:
         return []
@@ -208,7 +254,9 @@ def fetch_tab(spreadsheet, gid):
             seen[key] = 1
         headers.append(key)
     rows = []
-    for row in all_values[1:]:
+    for i, row in enumerate(all_values[1:]):
+        if i in green_indices:
+            continue          # skip completed jobs
         padded = row + [""] * (len(headers) - len(row))
         rows.append(dict(zip(headers, padded)))
     return rows
