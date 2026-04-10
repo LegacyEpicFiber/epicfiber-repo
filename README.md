@@ -11,13 +11,11 @@ Hosted via **GitHub Pages** and auto-updated every morning at 6 AM.
 
 ## Live Maps
 
-> Replace `YOUR-ORG` with your GitHub username or organization after setup.
-
 | Map | URL |
 |-----|-----|
-| Temporary Locates | `https://YOUR-ORG.github.io/epicfiber-maps/map-temporary-locates.html` |
-| Bury / DWB | `https://YOUR-ORG.github.io/epicfiber-maps/map-bury--dwb.html` |
-| Landing Page | `https://YOUR-ORG.github.io/epicfiber-maps/` |
+| Temporary Locates | https://legacyepicfiber.github.io/epicfiber-repo/map-temporary-locates.html |
+| Bury / DWB | https://legacyepicfiber.github.io/epicfiber-repo/map-bury--dwb.html |
+| Landing Page | https://legacyepicfiber.github.io/epicfiber-repo/ |
 
 ---
 
@@ -35,8 +33,8 @@ Hosted via **GitHub Pages** and auto-updated every morning at 6 AM.
 ## Quick Install (new machine)
 
 ```bash
-git clone https://github.com/YOUR-ORG/epicfiber-maps.git
-cd epicfiber-maps
+git clone https://github.com/LegacyEpicFiber/epicfiber-repo.git
+cd epicfiber-repo
 bash install.sh
 ```
 
