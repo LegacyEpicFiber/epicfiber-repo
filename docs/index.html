@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Legacy Epic Fiber — Address Maps</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      background: #0b0f1a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 16px;
+    }
+
+    /* ── Header ── */
+    .header {
+      text-align: center;
+      margin-bottom: 56px;
+    }
+    .logo-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      margin-bottom: 10px;
+    }
+    .logo-icon {
+      width: 44px; height: 44px;
+      background: linear-gradient(135deg, #f97316, #ea580c);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+      box-shadow: 0 0 20px rgba(249,115,22,0.35);
+    }
+    .company-name {
+      font-size: 22px;
+      font-weight: 700;
+      color: #f1f5f9;
+      letter-spacing: -0.01em;
+    }
+    .tagline {
+      font-size: 14px;
+      color: #475569;
+      letter-spacing: 0.03em;
+    }
+
+    /* ── Cards ── */
+    .cards {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 760px;
+      width: 100%;
+    }
+
+    .card {
+      background: #111827;
+      border: 1px solid #1e293b;
+      border-radius: 16px;
+      padding: 32px 28px;
+      width: 340px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
+    }
+    .card:hover {
+      border-color: #f97316;
+      transform: translateY(-3px);
+      box-shadow: 0 12px 36px rgba(249,115,22,0.12);
+    }
+
+    .card-icon {
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px;
+    }
+    .card-icon.orange { background: rgba(249,115,22,0.15); }
+    .card-icon.blue   { background: rgba(59,130,246,0.15); }
+
+    .card-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #475569;
+    }
+    .card-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #f1f5f9;
+      line-height: 1.2;
+    }
+    .card-desc {
+      font-size: 13px;
+      color: #64748b;
+      line-height: 1.6;
+    }
+    .card-count {
+      font-size: 13px;
+      color: #94a3b8;
+      font-variant-numeric: tabular-nums;
+    }
+    .card-count .num {
+      font-size: 28px;
+      font-weight: 700;
+      color: #f1f5f9;
+      display: block;
+      line-height: 1;
+      margin-bottom: 2px;
+    }
+
+    .open-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #f97316;
+      color: #fff;
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      margin-top: auto;
+      transition: background 0.15s;
+      width: fit-content;
+    }
+    .open-btn:hover { background: #ea580c; }
+    .open-btn.blue-btn { background: #2563eb; }
+    .open-btn.blue-btn:hover { background: #1d4ed8; }
+
+    /* ── Footer ── */
+    .footer {
+      margin-top: 52px;
+      text-align: center;
+      font-size: 12px;
+      color: #334155;
+      line-height: 1.8;
+    }
+    .footer #last-updated { color: #475569; }
+
+    /* ── Divider ── */
+    .divider {
+      width: 1px;
+      height: 32px;
+      background: #1e293b;
+      align-self: center;
+      display: none;
+    }
+    @media (min-width: 720px) {
+      .divider { display: block; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo-row">
+      <div class="logo-icon">🔌</div>
+      <span class="company-name">Legacy Epic Fiber</span>
+    </div>
+    <div class="tagline">Bore &amp; Bury — Address Proximity Maps</div>
+  </div>
+
+  <!-- Cards -->
+  <div class="cards">
+
+    <!-- Card 1: Temporary Locates -->
+    <a class="card" href="map-temporary-locates.html">
+      <div class="card-icon orange">📍</div>
+      <div>
+        <div class="card-label">Active Locates</div>
+        <div class="card-title">Temporary Locates</div>
+      </div>
+      <div class="card-desc">
+        811 locate tickets currently in the queue. Click any address to see its
+        5 closest neighbors and plan efficient routing.
+      </div>
+      <div class="card-count">
+        <span class="num" id="count-locates">—</span>
+        addresses plotted
+      </div>
+      <span class="open-btn">Open Map ↗</span>
+    </a>
+
+    <!-- Card 2: Bury / DWB -->
+    <a class="card" href="map-bury--dwb.html">
+      <div class="card-icon blue">🗺️</div>
+      <div>
+        <div class="card-label">Full Job List</div>
+        <div class="card-title">Bury / DWB</div>
+      </div>
+      <div class="card-desc">
+        All burial and directional bore jobs. Use the proximity mesh to identify
+        clusters and coordinate field crew scheduling.
+      </div>
+      <div class="card-count">
+        <span class="num" id="count-bury">—</span>
+        addresses plotted
+      </div>
+      <span class="open-btn blue-btn">Open Map ↗</span>
+    </a>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div id="last-updated">Loading sync info…</div>
+    <div style="margin-top:6px">Maps auto-sync daily at 6 AM · Data from Google Sheets</div>
+  </div>
+
+  <script>
+    // Load metadata.json written by generate_map.py
+    fetch('metadata.json')
+      .then(r => r.json())
+      .then(meta => {
+        const tabs = meta.tabs || {};
+        const locates = tabs['TEMPORARY LOCATES'];
+        const bury    = tabs['BURY / DWB'];
+        if (locates !== undefined) document.getElementById('count-locates').textContent = locates;
+        if (bury    !== undefined) document.getElementById('count-bury').textContent    = bury;
+        const updated = meta.last_updated_display || meta.last_updated || '';
+        document.getElementById('last-updated').textContent =
+          updated ? `Last synced: ${updated}` : '';
+      })
+      .catch(() => {
+        document.getElementById('last-updated').textContent = 'Sync info unavailable';
+      });
+  </script>
+
+</body>
+</html>

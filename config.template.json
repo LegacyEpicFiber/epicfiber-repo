@@ -1,0 +1,13 @@
+{
+  "_comment": "Copy this file to config.json and fill in your own values.",
+  "spreadsheet_id": "YOUR_GOOGLE_SHEET_ID",
+  "service_account_path": "~/path/to/service_account.json",
+  "docs_dir": "~/path/to/epicfiber-maps/docs",
+  "cache_dir": "~/path/to/epicfiber-maps/cache",
+  "repo_path": "~/path/to/epicfiber-maps",
+  "auto_push": true,
+  "tabs": {
+    "TEMPORARY LOCATES": "TAB_GID_1",
+    "BURY / DWB": "TAB_GID_2"
+  }
+}

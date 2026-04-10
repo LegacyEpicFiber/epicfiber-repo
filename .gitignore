@@ -1,0 +1,17 @@
+# Personal config — never commit credentials or local paths
+config.json
+service_account.json
+
+# Geocode cache — large and machine-specific, not needed in repo
+cache/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+
+# Generated maps are committed (they ARE the GitHub Pages content)
+# docs/map-*.html  ← intentionally tracked
+# docs/metadata.json  ← intentionally tracked
+# docs/index.html  ← intentionally tracked

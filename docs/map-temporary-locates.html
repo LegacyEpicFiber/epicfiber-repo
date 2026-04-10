@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TEMPORARY LOCATES — Proximity Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #0f1117; color: #e2e8f0; overflow: hidden; }
+  #map { width: 100vw; height: 100vh; }
+
+  /* ── HUD ── */
+  #hud {
+    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+    background: rgba(15,17,23,0.88); backdrop-filter: blur(6px);
+    border: 1px solid #334155; border-radius: 10px;
+    padding: 8px 16px; z-index: 1000;
+    display: flex; align-items: center; gap: 14px; font-size: 13px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    white-space: nowrap;
+  }
+  #hud .title { font-weight: 700; color: #cbd5e1; letter-spacing: 0.02em; }
+  #hud .count { color: #475569; font-size: 12px; }
+  #hud .selected-info { color: #60a5fa; font-size: 12px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+  #reset-btn {
+    background: #1e293b; border: 1px solid #475569; color: #94a3b8;
+    padding: 4px 12px; border-radius: 5px; cursor: pointer; font-size: 12px;
+    transition: all 0.15s;
+  }
+  #reset-btn:hover { background: #334155; color: #e2e8f0; border-color: #64748b; }
+  #reset-btn:active { background: #475569; }
+
+  /* ── LEGEND ── */
+  #legend {
+    position: fixed; bottom: 24px; left: 16px;
+    background: rgba(15,17,23,0.88); backdrop-filter: blur(6px);
+    border: 1px solid #334155; border-radius: 10px;
+    padding: 12px 16px; z-index: 1000; font-size: 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  #legend .legend-title { color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
+  .legend-row { display: flex; align-items: center; gap: 8px; margin: 5px 0; color: #94a3b8; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; border: 1.5px solid rgba(255,255,255,0.25); }
+
+  /* ── INSTRUCTIONS ── */
+  #instructions {
+    position: fixed; bottom: 24px; right: 16px;
+    background: rgba(15,17,23,0.88); backdrop-filter: blur(6px);
+    border: 1px solid #334155; border-radius: 10px;
+    padding: 10px 14px; z-index: 1000; font-size: 11px; color: #475569;
+    line-height: 1.6;
+  }
+
+  /* ── POPUPS ── */
+  .leaflet-popup-content-wrapper {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    border-radius: 10px !important;
+    color: #e2e8f0 !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
+    padding: 0 !important;
+  }
+  .leaflet-popup-content {
+    margin: 0 !important;
+    padding: 14px 16px !important;
+    min-width: 200px;
+  }
+  .leaflet-popup-tip { background: #1e293b !important; }
+  .leaflet-popup-close-button { color: #64748b !important; font-size: 16px !important; top: 8px !important; right: 10px !important; }
+  .leaflet-popup-close-button:hover { color: #e2e8f0 !important; }
+  .popup-address { font-weight: 700; font-size: 14px; color: #f1f5f9; margin-bottom: 3px; }
+  .popup-city { color: #64748b; font-size: 12px; margin-bottom: 3px; }
+  .popup-meta { color: #475569; font-size: 11px; margin-bottom: 10px; }
+  .popup-dist { color: #60a5fa; font-size: 11px; margin-bottom: 10px; font-style: italic; }
+  .popup-link {
+    display: inline-block; background: #2563eb; color: #fff !important;
+    text-decoration: none; padding: 5px 12px; border-radius: 5px; font-size: 12px;
+    font-weight: 500; transition: background 0.15s;
+  }
+  .popup-link:hover { background: #1d4ed8 !important; }
+
+  /* ── LOADING ── */
+  #loading {
+    position: fixed; inset: 0; background: #0f1117;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999; flex-direction: column; gap: 12px;
+  }
+  #loading .spinner {
+    width: 36px; height: 36px; border: 3px solid #334155;
+    border-top-color: #3b82f6; border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  #loading .loading-text { color: #64748b; font-size: 14px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- Loading screen -->
+<div id="loading">
+  <div class="spinner"></div>
+  <div class="loading-text">Loading map…</div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <span class="title">TEMPORARY LOCATES</span>
+  <span class="count" id="count-label"></span>
+  <span class="selected-info" id="selected-label"></span>
+  <button id="reset-btn" onclick="resetAll()" style="display:none">✕ Reset</button>
+</div>
+
+<!-- Legend -->
+<div id="legend">
+  <div class="legend-title">Proximity from selected</div>
+  <div class="legend-row"><div class="dot" style="background:#3b82f6"></div> Selected node</div>
+  <div class="legend-row"><div class="dot" style="background:#22c55e"></div> 5 closest</div>
+  <div class="legend-row"><div class="dot" style="background:#eab308"></div> Next 10 (6–15)</div>
+  <div class="legend-row"><div class="dot" style="background:#ef4444"></div> Farther (16+)</div>
+  <div class="legend-row"><div class="dot" style="background:#9ca3af"></div> Unselected</div>
+</div>
+
+<!-- Instructions -->
+<div id="instructions">
+  <strong style="color:#64748b">Click</strong> any dot → proximity view<br>
+  <strong style="color:#64748b">Hover</strong> → nearest 5 lines<br>
+  <strong style="color:#64748b">Click again</strong> → deselect
+</div>
+
+<!-- Map -->
+<div id="map"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+//  DATA  (injected by generate_map.py)
+// ════════════════════════════════════════════════════════════════════════════
+const ADDRESSES = [
+  {
+    "address": "225 W PLYMOUTH ST",
+    "city": "BREMEN",
+    "county": "Marshall County",
+    "township": "Bremen Township",
+    "state": "",
+    "lat": 41.4466125,
+    "lng": -86.1479969,
+    "maps_url": "https://maps.google.com/?q=225+W+PLYMOUTH+ST%2C+BREMEN"
+  },
+  {
+    "address": "15938 County Road 8",
+    "city": "BRISTOL",
+    "county": "Elkhart County",
+    "township": "Jefferson Township",
+    "state": "",
+    "lat": 41.7176482,
+    "lng": -85.7726472,
+    "maps_url": "https://maps.google.com/?q=15938+County+Road+8%2C+BRISTOL"
+  },
+  {
+    "address": "1134 S 500 E",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.144951951956,
+    "lng": -85.396329122151,
+    "maps_url": "https://maps.google.com/?q=1134+S+500+E%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "1180 E 500 N",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.23611423424,
+    "lng": -85.469333170782,
+    "maps_url": "https://maps.google.com/?q=1180+E+500+N%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "321 West 500 N",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.23590036348,
+    "lng": -85.49835246294,
+    "maps_url": "https://maps.google.com/?q=321+West+500+N%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "5250 E LITTLE TURTLE TRL",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.152809113357,
+    "lng": -85.393262122343,
+    "maps_url": "https://maps.google.com/?q=5250+E+LITTLE+TURTLE+TRL%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "1209 CYRILLA DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.6995892,
+    "lng": -86.02563,
+    "maps_url": "https://maps.google.com/?q=1209+CYRILLA+DR%2C+ELKHART"
+  },
+  {
+    "address": "1209 CYRILLA DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.6995892,
+    "lng": -86.02563,
+    "maps_url": "https://maps.google.com/?q=1209+CYRILLA+DR%2C+ELKHART"
+  },
+  {
+    "address": "23930 DAHLIA CT",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.6467746,
+    "lng": -85.9254909,
+    "maps_url": "https://maps.google.com/?q=23930+DAHLIA+CT%2C+ELKHART"
+  },
+  {
+    "address": "25885 LAKE DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.7466978,
+    "lng": -85.9642032,
+    "maps_url": "https://maps.google.com/?q=25885+LAKE+DR%2C+ELKHART"
+  },
+  {
+    "address": "30359 S MEADOW BROOK LN",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.6997248,
+    "lng": -86.0496323,
+    "maps_url": "https://maps.google.com/?q=30359+S+MEADOW+BROOK+LN%2C+ELKHART"
+  },
+  {
+    "address": "4130 BASSWOOD DR",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.606106804145,
+    "lng": -85.899849902051,
+    "maps_url": "https://maps.google.com/?q=4130+BASSWOOD+DR%2C+GOSHEN"
+  },
+  {
+    "address": "4211 TYLER LN",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.607956763383,
+    "lng": -85.900948989733,
+    "maps_url": "https://maps.google.com/?q=4211+TYLER+LN%2C+GOSHEN"
+  },
+  {
+    "address": "1022 S MAPLE ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.55164164377,
+    "lng": -85.668226360973,
+    "maps_url": "https://maps.google.com/?q=1022+S+MAPLE+ST%2C+MARION"
+  },
+  {
+    "address": "1022 S MAPLE ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.55164164377,
+    "lng": -85.668226360973,
+    "maps_url": "https://maps.google.com/?q=1022+S+MAPLE+ST%2C+MARION"
+  },
+  {
+    "address": "2518 S 500 E",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.5461067,
+    "lng": -85.577803,
+    "maps_url": "https://maps.google.com/?q=2518+S+500+E%2C+MARION"
+  },
+  {
+    "address": "2711 S WASHINGTON ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.5465437,
+    "lng": -85.6598008,
+    "maps_url": "https://maps.google.com/?q=2711+S+WASHINGTON+ST%2C+MARION"
+  },
+  {
+    "address": "2818 S GALLATIN ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.535481,
+    "lng": -85.6622634,
+    "maps_url": "https://maps.google.com/?q=2818+S+GALLATIN+ST%2C+MARION"
+  },
+  {
+    "address": "5935 RED FOX DR",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.638811556857,
+    "lng": -85.684771272815,
+    "maps_url": "https://maps.google.com/?q=5935+RED+FOX+DR%2C+MARION"
+  },
+  {
+    "address": "6066 N E 00 W",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.640619582954,
+    "lng": -85.675178767454,
+    "maps_url": "https://maps.google.com/?q=6066+N+E+00+W%2C+MARION"
+  },
+  {
+    "address": "903 W 9TH ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.5526958,
+    "lng": -85.6694922,
+    "maps_url": "https://maps.google.com/?q=903+W+9TH+ST%2C+MARION"
+  },
+  {
+    "address": "931 N E 00 W",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.5535803,
+    "lng": -85.5829906,
+    "maps_url": "https://maps.google.com/?q=931+N+E+00+W%2C+MARION"
+  },
+  {
+    "address": "100 ORPHA DR",
+    "city": "MIDDLEBURY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.6584479,
+    "lng": -85.7089082,
+    "maps_url": "https://maps.google.com/?q=100+ORPHA+DR%2C+MIDDLEBURY"
+  },
+  {
+    "address": "13166 Co Rd 14",
+    "city": "MIDDLEBURY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.8549901,
+    "lng": -84.7459633,
+    "maps_url": "https://maps.google.com/?q=13166+Co+Rd+14%2C+MIDDLEBURY"
+  },
+  {
+    "address": "130 W 7TH ST",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.7545749,
+    "lng": -86.0750093,
+    "maps_url": "https://maps.google.com/?q=130+W+7TH+ST%2C+PERU"
+  },
+  {
+    "address": "130 W 7TH ST",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.7545749,
+    "lng": -86.0750093,
+    "maps_url": "https://maps.google.com/?q=130+W+7TH+ST%2C+PERU"
+  },
+  {
+    "address": "367 W 6TH ST",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.7503909,
+    "lng": -86.0815162,
+    "maps_url": "https://maps.google.com/?q=367+W+6TH+ST%2C+PERU"
+  },
+  {
+    "address": "955 CHERRY LN",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.7393126,
+    "lng": -86.0473926,
+    "maps_url": "https://maps.google.com/?q=955+CHERRY+LN%2C+PERU"
+  },
+  {
+    "address": "973 ROSEWOOD DR",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.7408938,
+    "lng": -86.0474845,
+    "maps_url": "https://maps.google.com/?q=973+ROSEWOOD+DR%2C+PERU"
+  },
+  {
+    "address": "22520 KERN RD",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.6083454,
+    "lng": -86.2538025,
+    "maps_url": "https://maps.google.com/?q=22520+KERN+RD%2C+SOUTH+BEND"
+  },
+  {
+    "address": "6109 TAMERLANE DR",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.6106364,
+    "lng": -86.2176226,
+    "maps_url": "https://maps.google.com/?q=6109+TAMERLANE+DR%2C+SOUTH+BEND"
+  },
+  {
+    "address": "6660 IN-205",
+    "city": "SOUTH WHITLEY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.096270359699,
+    "lng": -85.618017271801,
+    "maps_url": "https://maps.google.com/?q=6660+IN-205%2C+SOUTH+WHITLEY"
+  },
+  {
+    "address": "3012 HEMLOCK LN",
+    "city": "WARSAW",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.210264752442,
+    "lng": -85.86345337283,
+    "maps_url": "https://maps.google.com/?q=3012+HEMLOCK+LN%2C+WARSAW"
+  },
+  {
+    "address": "3912 LAKE ST",
+    "city": "BRIDGMAN",
+    "county": "Berrien County",
+    "township": "Weesaw Township",
+    "state": "",
+    "lat": 41.942801,
+    "lng": -86.5479012,
+    "maps_url": "https://maps.google.com/?q=3912+LAKE+ST%2C+BRIDGMAN"
+  },
+  {
+    "address": "15335 CANARY DR",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.041145163039,
+    "lng": -86.169026943942,
+    "maps_url": "https://maps.google.com/?q=15335+CANARY+DR%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "1045 W LINCOLN AVE",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.9872778,
+    "lng": -85.0827034,
+    "maps_url": "https://maps.google.com/?q=1045+W+LINCOLN+AVE%2C+IONIA"
+  },
+  {
+    "address": "217 DYE ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.9833647,
+    "lng": -85.0693926,
+    "maps_url": "https://maps.google.com/?q=217+DYE+ST%2C+IONIA"
+  },
+  {
+    "address": "316 BLISS ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.9864058,
+    "lng": -85.0567898,
+    "maps_url": "https://maps.google.com/?q=316+BLISS+ST%2C+IONIA"
+  },
+  {
+    "address": "322 STEVENSON ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.98616,
+    "lng": -85.04633,
+    "maps_url": "https://maps.google.com/?q=322+STEVENSON+ST%2C+IONIA"
+  },
+  {
+    "address": "424 TAYLOR CT",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.9849272,
+    "lng": -85.0735705,
+    "maps_url": "https://maps.google.com/?q=424+TAYLOR+CT%2C+IONIA"
+  },
+  {
+    "address": "447 E LINCOLN AVE",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.9873015,
+    "lng": -85.052716,
+    "maps_url": "https://maps.google.com/?q=447+E+LINCOLN+AVE%2C+IONIA"
+  },
+  {
+    "address": "475 HARTER ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.9866243,
+    "lng": -85.0727299,
+    "maps_url": "https://maps.google.com/?q=475+HARTER+ST%2C+IONIA"
+  },
+  {
+    "address": "615 PROSPECT ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.9893867,
+    "lng": -85.0491437,
+    "maps_url": "https://maps.google.com/?q=615+PROSPECT+ST%2C+IONIA"
+  },
+  {
+    "address": "620 W MAIN ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.9820898,
+    "lng": -85.0725822,
+    "maps_url": "https://maps.google.com/?q=620+W+MAIN+ST%2C+IONIA"
+  },
+  {
+    "address": "634 PROSPECT ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.9895484,
+    "lng": -85.0488003,
+    "maps_url": "https://maps.google.com/?q=634+PROSPECT+ST%2C+IONIA"
+  },
+  {
+    "address": "700 E WASHINGTON ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.985069,
+    "lng": -85.047581,
+    "maps_url": "https://maps.google.com/?q=700+E+WASHINGTON+ST%2C+IONIA"
+  },
+  {
+    "address": "804 E LINCOLN AVE",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.0935863,
+    "lng": -84.8418442,
+    "maps_url": "https://maps.google.com/?q=804+E+LINCOLN+AVE%2C+IONIA"
+  },
+  {
+    "address": "3128 LORRIE DR",
+    "city": "SPRING ARBOR",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.215344,
+    "lng": -84.5222677,
+    "maps_url": "https://maps.google.com/?q=3128+LORRIE+DR%2C+SPRING+ARBOR"
+  },
+  {
+    "address": "89 DICKENS ST",
+    "city": "SPRING ARBOR",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.2078601,
+    "lng": -84.5622582,
+    "maps_url": "https://maps.google.com/?q=89+DICKENS+ST%2C+SPRING+ARBOR"
+  },
+  {
+    "address": "1532 S CHERRY DR",
+    "city": "STEVENSVILLE",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.020313685588,
+    "lng": -86.491277060428,
+    "maps_url": "https://maps.google.com/?q=1532+S+CHERRY+DR%2C+STEVENSVILLE"
+  },
+  {
+    "address": "332 BLUFFVIEW",
+    "city": "WATERVLIET",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.1848522,
+    "lng": -86.2582716,
+    "maps_url": "https://maps.google.com/?q=332+BLUFFVIEW%2C+WATERVLIET"
+  }
+];
+
+// ════════════════════════════════════════════════════════════════════════════
+//  MAP INIT
+// ════════════════════════════════════════════════════════════════════════════
+const map = L.map('map', {
+  zoomControl: true,
+  preferCanvas: true,   // better performance for many markers
+});
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a> contributors © <a href="https://carto.com/">CARTO</a>',
+  subdomains: 'abcd',
+  maxZoom: 19,
+}).addTo(map);
+
+// ════════════════════════════════════════════════════════════════════════════
+//  COLORS
+// ════════════════════════════════════════════════════════════════════════════
+const C = {
+  default:  '#9ca3af',
+  selected: '#3b82f6',
+  close:    '#22c55e',
+  medium:   '#eab308',
+  far:      '#ef4444',
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+//  HAVERSINE  (great-circle distance in km)
+// ════════════════════════════════════════════════════════════════════════════
+function haversine(a, b) {
+  const R = 6371;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const chord =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.lat * Math.PI / 180) *
+    Math.cos(b.lat * Math.PI / 180) *
+    Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(chord), Math.sqrt(1 - chord));
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  MARKERS
+// ════════════════════════════════════════════════════════════════════════════
+function markerOpts(color, big) {
+  return {
+    radius: big ? 9 : 7,
+    fillColor: color,
+    color: '#ffffff',
+    weight: big ? 2.5 : 1.5,
+    opacity: 1,
+    fillOpacity: 0.92,
+  };
+}
+
+const markers = ADDRESSES.map((a, i) => {
+  const m = L.circleMarker([a.lat, a.lng], markerOpts(C.default, false));
+
+  // Popup built on-open so distance is current
+  m.bindPopup(() => buildPopup(i), { maxWidth: 260, autoPan: true });
+
+  m.on('click', (e) => { L.DomEvent.stopPropagation(e); selectNode(i); });
+  m.on('mouseover', () => { if (selectedIdx === null) showHoverLines(i); });
+  m.on('mouseout',  () => { if (selectedIdx === null) clearHoverLines(); });
+
+  m.addTo(map);
+  return m;
+});
+
+function buildPopup(i) {
+  const a = ADDRESSES[i];
+  let distHtml = '';
+  if (selectedIdx !== null && selectedIdx !== i) {
+    const km = haversine(ADDRESSES[selectedIdx], a);
+    const mi = (km * 0.621371).toFixed(1);
+    distHtml = `<div class="popup-dist">${mi} mi from selected</div>`;
+  }
+  const meta = [a.county, a.township].filter(Boolean).join(' · ');
+  const metaHtml = meta ? `<div class="popup-meta">${meta}</div>` : '';
+  return `
+    <div class="popup-address">${a.address}</div>
+    <div class="popup-city">${a.city}${a.state ? ', ' + a.state : ''}</div>
+    ${metaHtml}
+    ${distHtml}
+    <a class="popup-link" href="${a.maps_url}" target="_blank">Open in Google Maps ↗</a>
+  `;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════════════════════════
+let selectedIdx = null;
+let hoverLines  = [];
+let clickLines  = [];
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SELECTION  &  PROXIMITY COLORING
+// ════════════════════════════════════════════════════════════════════════════
+function selectNode(i) {
+  if (selectedIdx === i) { resetAll(); return; }
+
+  selectedIdx = i;
+  clearHoverLines();
+  clearClickLines();
+
+  applyProximityColors(i);
+  drawClickLines(i);
+
+  markers[i].setStyle(markerOpts(C.selected, true));
+  markers[i].openPopup();
+
+  const addr = ADDRESSES[i].address;
+  document.getElementById('selected-label').textContent = `📍 ${addr}`;
+  document.getElementById('reset-btn').style.display = 'inline-block';
+}
+
+function applyProximityColors(centerIdx) {
+  const center = ADDRESSES[centerIdx];
+
+  // Build ranked list (0 = self, 1-5 = close, 6-15 = medium, 16+ = far)
+  const ranked = ADDRESSES
+    .map((a, i) => ({ i, dist: haversine(center, a) }))
+    .sort((a, b) => a.dist - b.dist);
+
+  ranked.forEach(({ i }, rank) => {
+    if (i === centerIdx) return; // handled separately
+    let color;
+    if (rank <= 5)       color = C.close;
+    else if (rank <= 15) color = C.medium;
+    else                 color = C.far;
+    markers[i].setStyle(markerOpts(color, false));
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  LINES
+// ════════════════════════════════════════════════════════════════════════════
+function nearestN(centerIdx, n) {
+  const center = ADDRESSES[centerIdx];
+  return ADDRESSES
+    .map((a, i) => ({ i, dist: haversine(center, a) }))
+    .filter(x => x.i !== centerIdx)
+    .sort((a, b) => a.dist - b.dist)
+    .slice(0, n);
+}
+
+function drawLine(from, to, opacity, dashed) {
+  return L.polyline(
+    [[from.lat, from.lng], [to.lat, to.lng]],
+    { color: '#60a5fa', weight: 1.5, opacity, dashArray: dashed ? '6 5' : null }
+  ).addTo(map);
+}
+
+function showHoverLines(idx) {
+  clearHoverLines();
+  const center = ADDRESSES[idx];
+  nearestN(idx, 5).forEach(({ i, dist }) => {
+    const op = Math.max(0.15, 1 - dist / 60);
+    hoverLines.push(drawLine(center, ADDRESSES[i], op, true));
+  });
+}
+function clearHoverLines() { hoverLines.forEach(l => map.removeLayer(l)); hoverLines = []; }
+
+function drawClickLines(idx) {
+  clearClickLines();
+  const center = ADDRESSES[idx];
+  nearestN(idx, 15).forEach(({ i, dist }) => {
+    const op = Math.max(0.2, 1 - dist / 100);
+    clickLines.push(drawLine(center, ADDRESSES[i], op, false));
+  });
+}
+function clearClickLines() { clickLines.forEach(l => map.removeLayer(l)); clickLines = []; }
+
+// ════════════════════════════════════════════════════════════════════════════
+//  RESET
+// ════════════════════════════════════════════════════════════════════════════
+function resetAll() {
+  selectedIdx = null;
+  clearHoverLines();
+  clearClickLines();
+  markers.forEach(m => m.setStyle(markerOpts(C.default, false)));
+  map.closePopup();
+  document.getElementById('selected-label').textContent = '';
+  document.getElementById('reset-btn').style.display = 'none';
+}
+
+// Click on map background → reset
+map.on('click', resetAll);
+
+// ════════════════════════════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════════════════════════════
+document.getElementById('count-label').textContent = `${ADDRESSES.length} addresses`;
+
+if (ADDRESSES.length > 0) {
+  const bounds = L.latLngBounds(ADDRESSES.map(a => [a.lat, a.lng]));
+  map.fitBounds(bounds.pad(0.08));
+} else {
+  map.setView([41.5, -86.0], 9);
+  document.getElementById('loading').innerHTML =
+    '<div style="color:#ef4444;font-size:14px">No geocoded addresses found.</div>';
+}
+
+// Hide loading screen once tiles start loading
+map.once('load', () => document.getElementById('loading').style.display = 'none');
+setTimeout(() => document.getElementById('loading').style.display = 'none', 2500);
+</script>
+</body>
+</html>

@@ -1,0 +1,6209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BURY / DWB — Proximity Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #0f1117; color: #e2e8f0; overflow: hidden; }
+  #map { width: 100vw; height: 100vh; }
+
+  /* ── HUD ── */
+  #hud {
+    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+    background: rgba(15,17,23,0.88); backdrop-filter: blur(6px);
+    border: 1px solid #334155; border-radius: 10px;
+    padding: 8px 16px; z-index: 1000;
+    display: flex; align-items: center; gap: 14px; font-size: 13px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    white-space: nowrap;
+  }
+  #hud .title { font-weight: 700; color: #cbd5e1; letter-spacing: 0.02em; }
+  #hud .count { color: #475569; font-size: 12px; }
+  #hud .selected-info { color: #60a5fa; font-size: 12px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+  #reset-btn {
+    background: #1e293b; border: 1px solid #475569; color: #94a3b8;
+    padding: 4px 12px; border-radius: 5px; cursor: pointer; font-size: 12px;
+    transition: all 0.15s;
+  }
+  #reset-btn:hover { background: #334155; color: #e2e8f0; border-color: #64748b; }
+  #reset-btn:active { background: #475569; }
+
+  /* ── LEGEND ── */
+  #legend {
+    position: fixed; bottom: 24px; left: 16px;
+    background: rgba(15,17,23,0.88); backdrop-filter: blur(6px);
+    border: 1px solid #334155; border-radius: 10px;
+    padding: 12px 16px; z-index: 1000; font-size: 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  #legend .legend-title { color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
+  .legend-row { display: flex; align-items: center; gap: 8px; margin: 5px 0; color: #94a3b8; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; border: 1.5px solid rgba(255,255,255,0.25); }
+
+  /* ── INSTRUCTIONS ── */
+  #instructions {
+    position: fixed; bottom: 24px; right: 16px;
+    background: rgba(15,17,23,0.88); backdrop-filter: blur(6px);
+    border: 1px solid #334155; border-radius: 10px;
+    padding: 10px 14px; z-index: 1000; font-size: 11px; color: #475569;
+    line-height: 1.6;
+  }
+
+  /* ── POPUPS ── */
+  .leaflet-popup-content-wrapper {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    border-radius: 10px !important;
+    color: #e2e8f0 !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
+    padding: 0 !important;
+  }
+  .leaflet-popup-content {
+    margin: 0 !important;
+    padding: 14px 16px !important;
+    min-width: 200px;
+  }
+  .leaflet-popup-tip { background: #1e293b !important; }
+  .leaflet-popup-close-button { color: #64748b !important; font-size: 16px !important; top: 8px !important; right: 10px !important; }
+  .leaflet-popup-close-button:hover { color: #e2e8f0 !important; }
+  .popup-address { font-weight: 700; font-size: 14px; color: #f1f5f9; margin-bottom: 3px; }
+  .popup-city { color: #64748b; font-size: 12px; margin-bottom: 3px; }
+  .popup-meta { color: #475569; font-size: 11px; margin-bottom: 10px; }
+  .popup-dist { color: #60a5fa; font-size: 11px; margin-bottom: 10px; font-style: italic; }
+  .popup-link {
+    display: inline-block; background: #2563eb; color: #fff !important;
+    text-decoration: none; padding: 5px 12px; border-radius: 5px; font-size: 12px;
+    font-weight: 500; transition: background 0.15s;
+  }
+  .popup-link:hover { background: #1d4ed8 !important; }
+
+  /* ── LOADING ── */
+  #loading {
+    position: fixed; inset: 0; background: #0f1117;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999; flex-direction: column; gap: 12px;
+  }
+  #loading .spinner {
+    width: 36px; height: 36px; border: 3px solid #334155;
+    border-top-color: #3b82f6; border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  #loading .loading-text { color: #64748b; font-size: 14px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- Loading screen -->
+<div id="loading">
+  <div class="spinner"></div>
+  <div class="loading-text">Loading map…</div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <span class="title">BURY / DWB</span>
+  <span class="count" id="count-label"></span>
+  <span class="selected-info" id="selected-label"></span>
+  <button id="reset-btn" onclick="resetAll()" style="display:none">✕ Reset</button>
+</div>
+
+<!-- Legend -->
+<div id="legend">
+  <div class="legend-title">Proximity from selected</div>
+  <div class="legend-row"><div class="dot" style="background:#3b82f6"></div> Selected node</div>
+  <div class="legend-row"><div class="dot" style="background:#22c55e"></div> 5 closest</div>
+  <div class="legend-row"><div class="dot" style="background:#eab308"></div> Next 10 (6–15)</div>
+  <div class="legend-row"><div class="dot" style="background:#ef4444"></div> Farther (16+)</div>
+  <div class="legend-row"><div class="dot" style="background:#9ca3af"></div> Unselected</div>
+</div>
+
+<!-- Instructions -->
+<div id="instructions">
+  <strong style="color:#64748b">Click</strong> any dot → proximity view<br>
+  <strong style="color:#64748b">Hover</strong> → nearest 5 lines<br>
+  <strong style="color:#64748b">Click again</strong> → deselect
+</div>
+
+<!-- Map -->
+<div id="map"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+//  DATA  (injected by generate_map.py)
+// ════════════════════════════════════════════════════════════════════════════
+const ADDRESSES = [
+  {
+    "address": "310 S GONSER AVE",
+    "city": "ASHLEY",
+    "county": "DeKalb County",
+    "township": "Ashley Township",
+    "state": "",
+    "lat": 41.52490228326,
+    "lng": -85.06444457747,
+    "maps_url": "https://maps.google.com/?q=310+S+GONSER+AVE%2C+ASHLEY"
+  },
+  {
+    "address": "301 S Garrison AVE / LOT. 9",
+    "city": "ASHLEY",
+    "county": "DeKalb County",
+    "township": "Ashley Township",
+    "state": "",
+    "lat": 41.525156471725,
+    "lng": -85.060945568574,
+    "maps_url": "https://maps.google.com/?q=301+S+Garrison+AVE+%2F+LOT.+9%2C+ASHLEY"
+  },
+  {
+    "address": "1855 JAYME DR",
+    "city": "BARODA",
+    "county": "Berrien County",
+    "township": "Baroda Township",
+    "state": "",
+    "lat": 41.947904267954,
+    "lng": -86.49757504005,
+    "maps_url": "https://maps.google.com/?q=1855+JAYME+DR%2C+BARODA"
+  },
+  {
+    "address": "105 ROSE LN",
+    "city": "BOURBON",
+    "county": "Marshall County",
+    "township": "Center Township",
+    "state": "",
+    "lat": 41.295713371244,
+    "lng": -86.107882692646,
+    "maps_url": "https://maps.google.com/?q=105+ROSE+LN%2C+BOURBON"
+  },
+  {
+    "address": "108 E JACKSON ST",
+    "city": "BOURBON",
+    "county": "Marshall County",
+    "township": "Center Township",
+    "state": "",
+    "lat": 41.293679667819,
+    "lng": -86.116080147259,
+    "maps_url": "https://maps.google.com/?q=108+E+JACKSON+ST%2C+BOURBON"
+  },
+  {
+    "address": "437 woodies LN",
+    "city": "BREMEN",
+    "county": "Marshall County",
+    "township": "Bremen Township",
+    "state": "",
+    "lat": 41.443163941228,
+    "lng": -86.136946241454,
+    "maps_url": "https://maps.google.com/?q=437+woodies+LN%2C+BREMEN"
+  },
+  {
+    "address": "1915 FAITH AVE",
+    "city": "BREMEN",
+    "county": "Marshall County",
+    "township": "Bremen Township",
+    "state": "",
+    "lat": 41.444646064485,
+    "lng": -86.169724857261,
+    "maps_url": "https://maps.google.com/?q=1915+FAITH+AVE%2C+BREMEN"
+  },
+  {
+    "address": "417 N MONTGOMERY ST",
+    "city": "BREMEN",
+    "county": "Marshall County",
+    "township": "Bremen Township",
+    "state": "",
+    "lat": 41.449451612519,
+    "lng": -86.14885915435,
+    "maps_url": "https://maps.google.com/?q=417+N+MONTGOMERY+ST%2C+BREMEN"
+  },
+  {
+    "address": "215 E MAPLE ST",
+    "city": "BREMEN",
+    "county": "Marshall County",
+    "township": "Bremen Township",
+    "state": "",
+    "lat": 41.444907057623,
+    "lng": -86.14473098027,
+    "maps_url": "https://maps.google.com/?q=215+E+MAPLE+ST%2C+BREMEN"
+  },
+  {
+    "address": "213 S Liberty DR",
+    "city": "BREMEN",
+    "county": "Marshall County",
+    "township": "Bremen Township",
+    "state": "",
+    "lat": 41.445360475342,
+    "lng": -86.160894854174,
+    "maps_url": "https://maps.google.com/?q=213+S+Liberty+DR%2C+BREMEN"
+  },
+  {
+    "address": "4837 W SHORE DR",
+    "city": "BREMEN",
+    "county": "Marshall County",
+    "township": "Bremen Township",
+    "state": "",
+    "lat": 41.414993158115,
+    "lng": -86.229039604341,
+    "maps_url": "https://maps.google.com/?q=4837+W+SHORE+DR%2C+BREMEN"
+  },
+  {
+    "address": "4479 E Shore DR",
+    "city": "BREMEN",
+    "county": "Marshall County",
+    "township": "Bremen Township",
+    "state": "",
+    "lat": 41.41373793478,
+    "lng": -86.221495513708,
+    "maps_url": "https://maps.google.com/?q=4479+E+Shore+DR%2C+BREMEN"
+  },
+  {
+    "address": "4479 E Shore DR",
+    "city": "BREMEN",
+    "county": "Marshall County",
+    "township": "Bremen Township",
+    "state": "",
+    "lat": 41.41373793478,
+    "lng": -86.221495513708,
+    "maps_url": "https://maps.google.com/?q=4479+E+Shore+DR%2C+BREMEN"
+  },
+  {
+    "address": "3873 LAKESHORE DR",
+    "city": "BREMEN",
+    "county": "Marshall County",
+    "township": "Bremen Township",
+    "state": "",
+    "lat": 41.422234365908,
+    "lng": -86.222980703689,
+    "maps_url": "https://maps.google.com/?q=3873+LAKESHORE+DR%2C+BREMEN"
+  },
+  {
+    "address": "2992 DOGWOOD CT",
+    "city": "BREMEN",
+    "county": "Marshall County",
+    "township": "Bremen Township",
+    "state": "",
+    "lat": 41.43575484385,
+    "lng": -86.114428201514,
+    "maps_url": "https://maps.google.com/?q=2992+DOGWOOD+CT%2C+BREMEN"
+  },
+  {
+    "address": "4346 2C RD",
+    "city": "BREMEN",
+    "county": "Marshall County",
+    "township": "Bremen Township",
+    "state": "",
+    "lat": 41.436542465011,
+    "lng": -86.143332479698,
+    "maps_url": "https://maps.google.com/?q=4346+2C+RD%2C+BREMEN"
+  },
+  {
+    "address": "3844 LAKE ST",
+    "city": "BRIDGMAN",
+    "county": "Berrien County",
+    "township": "Weesaw Township",
+    "state": "",
+    "lat": 41.942828185568,
+    "lng": -86.546492115817,
+    "maps_url": "https://maps.google.com/?q=3844+LAKE+ST%2C+BRIDGMAN"
+  },
+  {
+    "address": "9798 NIAGARA ROW",
+    "city": "BRIDGMAN",
+    "county": "Berrien County",
+    "township": "Weesaw Township",
+    "state": "",
+    "lat": 41.94075274049,
+    "lng": -86.544704207339,
+    "maps_url": "https://maps.google.com/?q=9798+NIAGARA+ROW%2C+BRIDGMAN"
+  },
+  {
+    "address": "9534 GAST RD",
+    "city": "BRIDGMAN",
+    "county": "Berrien County",
+    "township": "Weesaw Township",
+    "state": "",
+    "lat": 41.945638300658,
+    "lng": -86.543079394761,
+    "maps_url": "https://maps.google.com/?q=9534+GAST+RD%2C+BRIDGMAN"
+  },
+  {
+    "address": "9534 GAST RD",
+    "city": "BRIDGMAN",
+    "county": "Berrien County",
+    "township": "Weesaw Township",
+    "state": "",
+    "lat": 41.945638300658,
+    "lng": -86.543079394761,
+    "maps_url": "https://maps.google.com/?q=9534+GAST+RD%2C+BRIDGMAN"
+  },
+  {
+    "address": "19927 WINDYRIDGE",
+    "city": "BRISTOL",
+    "county": "Elkhart County",
+    "township": "Jefferson Township",
+    "state": "",
+    "lat": 41.686708378744,
+    "lng": -85.849925621129,
+    "maps_url": "https://maps.google.com/?q=19927+WINDYRIDGE%2C+BRISTOL"
+  },
+  {
+    "address": "22075 HANOVER DR",
+    "city": "BRISTOL",
+    "county": "Elkhart County",
+    "township": "Jefferson Township",
+    "state": "",
+    "lat": 41.712817376264,
+    "lng": -85.889616919238,
+    "maps_url": "https://maps.google.com/?q=22075+HANOVER+DR%2C+BRISTOL"
+  },
+  {
+    "address": "21465 SHANNON CT",
+    "city": "BRISTOL",
+    "county": "Elkhart County",
+    "township": "Jefferson Township",
+    "state": "",
+    "lat": 41.712196375829,
+    "lng": -85.879352698145,
+    "maps_url": "https://maps.google.com/?q=21465+SHANNON+CT%2C+BRISTOL"
+  },
+  {
+    "address": "17540 COUNTY ROAD 112",
+    "city": "BRISTOL",
+    "county": "Elkhart County",
+    "township": "Jefferson Township",
+    "state": "",
+    "lat": 41.689351957053,
+    "lng": -85.802830015317,
+    "maps_url": "https://maps.google.com/?q=17540+COUNTY+ROAD+112%2C+BRISTOL"
+  },
+  {
+    "address": "21409 DURHAM WAY",
+    "city": "BRISTOL",
+    "county": "Elkhart County",
+    "township": "Jefferson Township",
+    "state": "",
+    "lat": 41.718353155799,
+    "lng": -85.879597173881,
+    "maps_url": "https://maps.google.com/?q=21409+DURHAM+WAY%2C+BRISTOL"
+  },
+  {
+    "address": "18460 Brewster DR",
+    "city": "BRISTOL",
+    "county": "Elkhart County",
+    "township": "Jefferson Township",
+    "state": "",
+    "lat": 41.734327313622,
+    "lng": -85.821939551788,
+    "maps_url": "https://maps.google.com/?q=18460+Brewster+DR%2C+BRISTOL"
+  },
+  {
+    "address": "15478 FOXTAIL DR",
+    "city": "BRISTOL",
+    "county": "Elkhart County",
+    "township": "Jefferson Township",
+    "state": "",
+    "lat": 41.732691774799,
+    "lng": -85.765221060576,
+    "maps_url": "https://maps.google.com/?q=15478+FOXTAIL+DR%2C+BRISTOL"
+  },
+  {
+    "address": "1009 MALLARD DR",
+    "city": "BRISTOL",
+    "county": "Elkhart County",
+    "township": "Jefferson Township",
+    "state": "",
+    "lat": 41.72586725565,
+    "lng": -85.830477188943,
+    "maps_url": "https://maps.google.com/?q=1009+MALLARD+DR%2C+BRISTOL"
+  },
+  {
+    "address": "54075 EASTVIEW DR",
+    "city": "BRISTOL",
+    "county": "Elkhart County",
+    "township": "Jefferson Township",
+    "state": "",
+    "lat": 41.708121229245,
+    "lng": -85.873728853057,
+    "maps_url": "https://maps.google.com/?q=54075+EASTVIEW+DR%2C+BRISTOL"
+  },
+  {
+    "address": "53323 RED OAK CT",
+    "city": "BRISTOL",
+    "county": "Elkhart County",
+    "township": "Jefferson Township",
+    "state": "",
+    "lat": 41.719917956171,
+    "lng": -85.869853124366,
+    "maps_url": "https://maps.google.com/?q=53323+RED+OAK+CT%2C+BRISTOL"
+  },
+  {
+    "address": "54115 ANGELINE DR",
+    "city": "BRISTOL",
+    "county": "Elkhart County",
+    "township": "Jefferson Township",
+    "state": "",
+    "lat": 41.71095658081,
+    "lng": -85.887523680988,
+    "maps_url": "https://maps.google.com/?q=54115+ANGELINE+DR%2C+BRISTOL"
+  },
+  {
+    "address": "313 N BROADWAY ST",
+    "city": "BUTLER",
+    "county": "DeKalb County",
+    "township": "Butler Township",
+    "state": "",
+    "lat": 41.431727367107,
+    "lng": -84.871328519445,
+    "maps_url": "https://maps.google.com/?q=313+N+BROADWAY+ST%2C+BUTLER"
+  },
+  {
+    "address": "303 W LIBERTY ST",
+    "city": "BUTLER",
+    "county": "DeKalb County",
+    "township": "Butler Township",
+    "state": "",
+    "lat": 41.43268337294,
+    "lng": -84.873890570178,
+    "maps_url": "https://maps.google.com/?q=303+W+LIBERTY+ST%2C+BUTLER"
+  },
+  {
+    "address": "406 HIGH ST",
+    "city": "BUTLER",
+    "county": "DeKalb County",
+    "township": "Butler Township",
+    "state": "",
+    "lat": 41.431990009942,
+    "lng": -84.879887192771,
+    "maps_url": "https://maps.google.com/?q=406+HIGH+ST%2C+BUTLER"
+  },
+  {
+    "address": "3720 IN-1",
+    "city": "BUTLER",
+    "county": "DeKalb County",
+    "township": "Butler Township",
+    "state": "",
+    "lat": 41.399807298583,
+    "lng": -84.871760795635,
+    "maps_url": "https://maps.google.com/?q=3720+IN-1%2C+BUTLER"
+  },
+  {
+    "address": "108 MAXTON DR",
+    "city": "BUTLER",
+    "county": "DeKalb County",
+    "township": "Butler Township",
+    "state": "",
+    "lat": 41.435592453576,
+    "lng": -84.865592355981,
+    "maps_url": "https://maps.google.com/?q=108+MAXTON+DR%2C+BUTLER"
+  },
+  {
+    "address": "369 N PARK LN",
+    "city": "BUTLER",
+    "county": "DeKalb County",
+    "township": "Butler Township",
+    "state": "",
+    "lat": 41.434780371995,
+    "lng": -84.862729793564,
+    "maps_url": "https://maps.google.com/?q=369+N+PARK+LN%2C+BUTLER"
+  },
+  {
+    "address": "104 S PARK LN",
+    "city": "BUTLER",
+    "county": "DeKalb County",
+    "township": "Butler Township",
+    "state": "",
+    "lat": 41.433526251479,
+    "lng": -84.866011261919,
+    "maps_url": "https://maps.google.com/?q=104+S+PARK+LN%2C+BUTLER"
+  },
+  {
+    "address": "414 WESTWARD DR",
+    "city": "BUTLER",
+    "county": "DeKalb County",
+    "township": "Butler Township",
+    "state": "",
+    "lat": 41.433419888136,
+    "lng": -84.875467096083,
+    "maps_url": "https://maps.google.com/?q=414+WESTWARD+DR%2C+BUTLER"
+  },
+  {
+    "address": "1862 RESTORATION DR SW",
+    "city": "BYRON CENTER",
+    "county": "Kent County",
+    "township": "Byron Township",
+    "state": "",
+    "lat": 42.803763338526,
+    "lng": -85.711872250149,
+    "maps_url": "https://maps.google.com/?q=1862+RESTORATION+DR+SW%2C+BYRON+CENTER"
+  },
+  {
+    "address": "6681 AIRFIELD CT SW",
+    "city": "BYRON CENTER",
+    "county": "Kent County",
+    "township": "Byron Township",
+    "state": "",
+    "lat": 42.842833156537,
+    "lng": -85.694574042472,
+    "maps_url": "https://maps.google.com/?q=6681+AIRFIELD+CT+SW%2C+BYRON+CENTER"
+  },
+  {
+    "address": "8260 HARLOW AVE SW",
+    "city": "BYRON CENTER",
+    "county": "Kent County",
+    "township": "Byron Township",
+    "state": "",
+    "lat": 42.815054724003,
+    "lng": -85.725791313134,
+    "maps_url": "https://maps.google.com/?q=8260+HARLOW+AVE+SW%2C+BYRON+CENTER"
+  },
+  {
+    "address": "8260 HARLOW AVE SW",
+    "city": "BYRON CENTER",
+    "county": "Kent County",
+    "township": "Byron Township",
+    "state": "",
+    "lat": 42.815054724003,
+    "lng": -85.725791313134,
+    "maps_url": "https://maps.google.com/?q=8260+HARLOW+AVE+SW%2C+BYRON+CENTER"
+  },
+  {
+    "address": "1679 8TH AVE SW",
+    "city": "BYRON CENTER",
+    "county": "Kent County",
+    "township": "Byron Township",
+    "state": "",
+    "lat": 42.7983648273,
+    "lng": -85.802740971023,
+    "maps_url": "https://maps.google.com/?q=1679+8TH+AVE+SW%2C+BYRON+CENTER"
+  },
+  {
+    "address": "1691 LISA DR SW",
+    "city": "BYRON CENTER",
+    "county": "Kent County",
+    "township": "Byron Township",
+    "state": "",
+    "lat": 42.8371372633,
+    "lng": -85.705680013728,
+    "maps_url": "https://maps.google.com/?q=1691+LISA+DR+SW%2C+BYRON+CENTER"
+  },
+  {
+    "address": "1990 MORNING DEW DR SW",
+    "city": "BYRON CENTER",
+    "county": "Kent County",
+    "township": "Byron Township",
+    "state": "",
+    "lat": 42.815733551527,
+    "lng": -85.715595901955,
+    "maps_url": "https://maps.google.com/?q=1990+MORNING+DEW+DR+SW%2C+BYRON+CENTER"
+  },
+  {
+    "address": "8733 JOSHUA CT SW",
+    "city": "BYRON CENTER",
+    "county": "Kent County",
+    "township": "Byron Township",
+    "state": "",
+    "lat": 42.806319951014,
+    "lng": -85.718245905544,
+    "maps_url": "https://maps.google.com/?q=8733+JOSHUA+CT+SW%2C+BYRON+CENTER"
+  },
+  {
+    "address": "7810 BURLINGAME AVE SW",
+    "city": "BYRON CENTER",
+    "county": "Kent County",
+    "township": "Byron Township",
+    "state": "",
+    "lat": 42.823091653504,
+    "lng": -85.703069622135,
+    "maps_url": "https://maps.google.com/?q=7810+BURLINGAME+AVE+SW%2C+BYRON+CENTER"
+  },
+  {
+    "address": "1117 AMBER COVE DR SW",
+    "city": "BYRON CENTER",
+    "county": "Kent County",
+    "township": "Byron Township",
+    "state": "",
+    "lat": 42.837538316538,
+    "lng": -85.69117465334,
+    "maps_url": "https://maps.google.com/?q=1117+AMBER+COVE+DR+SW%2C+BYRON+CENTER"
+  },
+  {
+    "address": "1119 AMBER COVE DR SW",
+    "city": "BYRON CENTER",
+    "county": "Kent County",
+    "township": "Byron Township",
+    "state": "",
+    "lat": 42.837543178415,
+    "lng": -85.691221651454,
+    "maps_url": "https://maps.google.com/?q=1119+AMBER+COVE+DR+SW%2C+BYRON+CENTER"
+  },
+  {
+    "address": "2206 BYRON SHORES DR SW",
+    "city": "BYRON CENTER",
+    "county": "Kent County",
+    "township": "Byron Township",
+    "state": "",
+    "lat": 42.838962528163,
+    "lng": -85.712088069354,
+    "maps_url": "https://maps.google.com/?q=2206+BYRON+SHORES+DR+SW%2C+BYRON+CENTER"
+  },
+  {
+    "address": "359 PERRY ST SW",
+    "city": "BYRON CENTER",
+    "county": "Kent County",
+    "township": "Byron Township",
+    "state": "",
+    "lat": 42.797209955981,
+    "lng": -85.791807170002,
+    "maps_url": "https://maps.google.com/?q=359+PERRY+ST+SW%2C+BYRON+CENTER"
+  },
+  {
+    "address": "1075 108TH ST SW",
+    "city": "BYRON CENTER",
+    "county": "Kent County",
+    "township": "Byron Township",
+    "state": "",
+    "lat": 42.768265410214,
+    "lng": -85.689743128195,
+    "maps_url": "https://maps.google.com/?q=1075+108TH+ST+SW%2C+BYRON+CENTER"
+  },
+  {
+    "address": "325 PERRY ST SW",
+    "city": "BYRON CENTER",
+    "county": "Kent County",
+    "township": "Byron Township",
+    "state": "",
+    "lat": 42.797222753599,
+    "lng": -85.79102057101,
+    "maps_url": "https://maps.google.com/?q=325+PERRY+ST+SW%2C+BYRON+CENTER"
+  },
+  {
+    "address": "359 PERRY ST SW",
+    "city": "BYRON CENTER",
+    "county": "Kent County",
+    "township": "Byron Township",
+    "state": "",
+    "lat": 42.797209955981,
+    "lng": -85.791807170002,
+    "maps_url": "https://maps.google.com/?q=359+PERRY+ST+SW%2C+BYRON+CENTER"
+  },
+  {
+    "address": "1856 PLANTERS ROW DR SW",
+    "city": "BYRON CENTER",
+    "county": "Kent County",
+    "township": "Byron Township",
+    "state": "",
+    "lat": 42.804784710801,
+    "lng": -85.710914597774,
+    "maps_url": "https://maps.google.com/?q=1856+PLANTERS+ROW+DR+SW%2C+BYRON+CENTER"
+  },
+  {
+    "address": "21409 SAIL BAY DR",
+    "city": "CASSOPOLIS",
+    "county": "Cass County",
+    "township": "Cassopolis Township",
+    "state": "",
+    "lat": 41.886909837741,
+    "lng": -85.975333227612,
+    "maps_url": "https://maps.google.com/?q=21409+SAIL+BAY+DR%2C+CASSOPOLIS"
+  },
+  {
+    "address": "61426 WALNUT ST",
+    "city": "CASSOPOLIS",
+    "county": "Cass County",
+    "township": "Cassopolis Township",
+    "state": "",
+    "lat": 41.906046394913,
+    "lng": -85.996607478732,
+    "maps_url": "https://maps.google.com/?q=61426+WALNUT+ST%2C+CASSOPOLIS"
+  },
+  {
+    "address": "113 O S KEEFE ST",
+    "city": "CASSOPOLIS",
+    "county": "Cass County",
+    "township": "Cassopolis Township",
+    "state": "",
+    "lat": 41.91132402402,
+    "lng": -86.009938633861,
+    "maps_url": "https://maps.google.com/?q=113+O+S+KEEFE+ST%2C+CASSOPOLIS"
+  },
+  {
+    "address": "113 O S KEEFE ST",
+    "city": "CASSOPOLIS",
+    "county": "Cass County",
+    "township": "Cassopolis Township",
+    "state": "",
+    "lat": 41.91132402402,
+    "lng": -86.009938633861,
+    "maps_url": "https://maps.google.com/?q=113+O+S+KEEFE+ST%2C+CASSOPOLIS"
+  },
+  {
+    "address": "21441 SCHULTZ CT",
+    "city": "CASSOPOLIS",
+    "county": "Cass County",
+    "township": "Cassopolis Township",
+    "state": "",
+    "lat": 41.911629331826,
+    "lng": -85.979894213266,
+    "maps_url": "https://maps.google.com/?q=21441+SCHULTZ+CT%2C+CASSOPOLIS"
+  },
+  {
+    "address": "427 W PLEASANT ST",
+    "city": "CHURUBUSCO",
+    "county": "Whitley County",
+    "township": "Jackson Township",
+    "state": "",
+    "lat": 41.226739474057,
+    "lng": -85.323236638924,
+    "maps_url": "https://maps.google.com/?q=427+W+PLEASANT+ST%2C+CHURUBUSCO"
+  },
+  {
+    "address": "8051 E OLD US HIGHWAY 33",
+    "city": "CHURUBUSCO",
+    "county": "Whitley County",
+    "township": "Jackson Township",
+    "state": "",
+    "lat": 41.249100056111,
+    "lng": -85.336850429607,
+    "maps_url": "https://maps.google.com/?q=8051+E+OLD+US+HIGHWAY+33%2C+CHURUBUSCO"
+  },
+  {
+    "address": "230 GREENWOOD DR",
+    "city": "CHURUBUSCO",
+    "county": "Whitley County",
+    "township": "Jackson Township",
+    "state": "",
+    "lat": 41.232654272598,
+    "lng": -85.317048087766,
+    "maps_url": "https://maps.google.com/?q=230+GREENWOOD+DR%2C+CHURUBUSCO"
+  },
+  {
+    "address": "7057 LITTLE PAW PAW LAKE RD",
+    "city": "COLOMA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.214934230554,
+    "lng": -86.287007193683,
+    "maps_url": "https://maps.google.com/?q=7057+LITTLE+PAW+PAW+LAKE+RD%2C+COLOMA"
+  },
+  {
+    "address": "540 N PAW PAW ST",
+    "city": "COLOMA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.192654143607,
+    "lng": -86.303178147602,
+    "maps_url": "https://maps.google.com/?q=540+N+PAW+PAW+ST%2C+COLOMA"
+  },
+  {
+    "address": "6577 PAW PAW AVE",
+    "city": "COLOMA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.193363314664,
+    "lng": -86.29840014966,
+    "maps_url": "https://maps.google.com/?q=6577+PAW+PAW+AVE%2C+COLOMA"
+  },
+  {
+    "address": "6909 PAW PAW AVE",
+    "city": "COLOMA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.193320460885,
+    "lng": -86.290453048605,
+    "maps_url": "https://maps.google.com/?q=6909+PAW+PAW+AVE%2C+COLOMA"
+  },
+  {
+    "address": "375 GARRY ST",
+    "city": "COLOMA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.181582317553,
+    "lng": -86.314184733167,
+    "maps_url": "https://maps.google.com/?q=375+GARRY+ST%2C+COLOMA"
+  },
+  {
+    "address": "6801 ROSEMARY DR",
+    "city": "COLOMA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.205476722884,
+    "lng": -86.292613335342,
+    "maps_url": "https://maps.google.com/?q=6801+ROSEMARY+DR%2C+COLOMA"
+  },
+  {
+    "address": "2488 E WATERS EDGE DR",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.251154799148,
+    "lng": -85.443595606582,
+    "maps_url": "https://maps.google.com/?q=2488+E+WATERS+EDGE+DR%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "2040 S LONE PINE RD",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.132156404448,
+    "lng": -85.378043513253,
+    "maps_url": "https://maps.google.com/?q=2040+S+LONE+PINE+RD%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "4471 N AIRPORT RD",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.228349419606,
+    "lng": -85.482398425406,
+    "maps_url": "https://maps.google.com/?q=4471+N+AIRPORT+RD%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "5434 E LINCOLNWAY",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.136735128778,
+    "lng": -85.387291594133,
+    "maps_url": "https://maps.google.com/?q=5434+E+LINCOLNWAY%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "1114 W Depoy DR",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.168074452969,
+    "lng": -85.51279651028,
+    "maps_url": "https://maps.google.com/?q=1114+W+Depoy+DR%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "2640 E 400 N",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.123434351822,
+    "lng": -85.414848089852,
+    "maps_url": "https://maps.google.com/?q=2640+E+400+N%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "4545 N AIRPORT RD",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.229271321871,
+    "lng": -85.482392300149,
+    "maps_url": "https://maps.google.com/?q=4545+N+AIRPORT+RD%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "5178 N AIRPORT RD",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.23883964854,
+    "lng": -85.481975558756,
+    "maps_url": "https://maps.google.com/?q=5178+N+AIRPORT+RD%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "120 W WALKER WAY",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.1680976,
+    "lng": -85.4886648,
+    "maps_url": "https://maps.google.com/?q=120+W+WALKER+WAY%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "120 W WALKER WAY",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.1680976,
+    "lng": -85.4886648,
+    "maps_url": "https://maps.google.com/?q=120+W+WALKER+WAY%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "1895 IN-9",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.191410667942,
+    "lng": -85.462787199153,
+    "maps_url": "https://maps.google.com/?q=1895+IN-9%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "551 E SPEAR RD",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.256391239897,
+    "lng": -85.481122537649,
+    "maps_url": "https://maps.google.com/?q=551+E+SPEAR+RD%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "4863 IN-9",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.234349442965,
+    "lng": -85.462633349336,
+    "maps_url": "https://maps.google.com/?q=4863+IN-9%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "5684 E Smith St",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.197232308312,
+    "lng": -85.383085636564,
+    "maps_url": "https://maps.google.com/?q=5684+E+Smith+St%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "124 W VAN BUREN ST",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.157084357762,
+    "lng": -85.488782098742,
+    "maps_url": "https://maps.google.com/?q=124+W+VAN+BUREN+ST%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "1388 E CIDER MILL RD",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.181724573428,
+    "lng": -85.463824810634,
+    "maps_url": "https://maps.google.com/?q=1388+E+CIDER+MILL+RD%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "11 JEFFREY DR",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.16491541972,
+    "lng": -85.483986659022,
+    "maps_url": "https://maps.google.com/?q=11+JEFFREY+DR%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "112 S Chauncey ST",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.156841654481,
+    "lng": -85.489888363507,
+    "maps_url": "https://maps.google.com/?q=112+S+Chauncey+ST%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "1734 E BROOKSIDE TRL",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.159692414462,
+    "lng": -85.45785324776,
+    "maps_url": "https://maps.google.com/?q=1734+E+BROOKSIDE+TRL%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "276 S PUMPKIN RIDGE CT",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.156614379294,
+    "lng": -85.447024336167,
+    "maps_url": "https://maps.google.com/?q=276+S+PUMPKIN+RIDGE+CT%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "500 S 500 E",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.089218873985,
+    "lng": -85.480050133337,
+    "maps_url": "https://maps.google.com/?q=500+S+500+E%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "675 S SOMMERSET TRL",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.150301263363,
+    "lng": -85.463012865717,
+    "maps_url": "https://maps.google.com/?q=675+S+SOMMERSET+TRL%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "3040 E 500 N",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.117617692822,
+    "lng": -85.39561585169,
+    "maps_url": "https://maps.google.com/?q=3040+E+500+N%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "445 S 300 E",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.155599345984,
+    "lng": -85.434569770815,
+    "maps_url": "https://maps.google.com/?q=445+S+300+E%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "967 E GATESWORTH DR",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.256440655118,
+    "lng": -85.473178265344,
+    "maps_url": "https://maps.google.com/?q=967+E+GATESWORTH+DR%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "3090 E PICKETT LN",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.142905565002,
+    "lng": -85.432381456013,
+    "maps_url": "https://maps.google.com/?q=3090+E+PICKETT+LN%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "2327 E 500 N",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.128565666459,
+    "lng": -85.395815154311,
+    "maps_url": "https://maps.google.com/?q=2327+E+500+N%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "821 E 500 N",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.150224446449,
+    "lng": -85.396360548114,
+    "maps_url": "https://maps.google.com/?q=821+E+500+N%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "944 E 600 N",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.147438972236,
+    "lng": -85.376983609518,
+    "maps_url": "https://maps.google.com/?q=944+E+600+N%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "1990 E LEO SMITH LN",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.250327366428,
+    "lng": -85.45315845187,
+    "maps_url": "https://maps.google.com/?q=1990+E+LEO+SMITH+LN%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "2327 E 500 N",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.128565666459,
+    "lng": -85.395815154311,
+    "maps_url": "https://maps.google.com/?q=2327+E+500+N%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "2020 E 400 N",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.132245138744,
+    "lng": -85.415051717749,
+    "maps_url": "https://maps.google.com/?q=2020+E+400+N%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "3251 E 650 N",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.257920941789,
+    "lng": -85.428221760021,
+    "maps_url": "https://maps.google.com/?q=3251+E+650+N%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "579 E 600 N",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.153138410921,
+    "lng": -85.376986578543,
+    "maps_url": "https://maps.google.com/?q=579+E+600+N%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "81 N LEXINGTON DR",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.163990902036,
+    "lng": -85.513055292775,
+    "maps_url": "https://maps.google.com/?q=81+N+LEXINGTON+DR%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "6030 N SPEAR RD",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.251101190843,
+    "lng": -85.47252330057,
+    "maps_url": "https://maps.google.com/?q=6030+N+SPEAR+RD%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "1448 E BRIDGET LN",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.163973979559,
+    "lng": -85.463821292835,
+    "maps_url": "https://maps.google.com/?q=1448+E+BRIDGET+LN%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "4334 N 50 W",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.169029798641,
+    "lng": -85.574316363405,
+    "maps_url": "https://maps.google.com/?q=4334+N+50+W%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "435 S 300 E",
+    "city": "COLUMBIA CITY",
+    "county": "Whitley County",
+    "township": "Columbia City",
+    "state": "",
+    "lat": 41.156475109952,
+    "lng": -85.434569872322,
+    "maps_url": "https://maps.google.com/?q=435+S+300+E%2C+COLUMBIA+CITY"
+  },
+  {
+    "address": "1121 COUNTY ROAD 13",
+    "city": "CORUNNA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.488759470813,
+    "lng": -85.128112433424,
+    "maps_url": "https://maps.google.com/?q=1121+COUNTY+ROAD+13%2C+CORUNNA"
+  },
+  {
+    "address": "1072 US-6",
+    "city": "CORUNNA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.43828881322,
+    "lng": -85.143605015079,
+    "maps_url": "https://maps.google.com/?q=1072+US-6%2C+CORUNNA"
+  },
+  {
+    "address": "1016 US-6",
+    "city": "CORUNNA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.438255777783,
+    "lng": -85.145563831218,
+    "maps_url": "https://maps.google.com/?q=1016+US-6%2C+CORUNNA"
+  },
+  {
+    "address": "106 N BRIDGE ST",
+    "city": "CORUNNA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.436162785933,
+    "lng": -85.147321055145,
+    "maps_url": "https://maps.google.com/?q=106+N+BRIDGE+ST%2C+CORUNNA"
+  },
+  {
+    "address": "1030 COUNTY ROAD 20",
+    "city": "CORUNNA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.45266387856,
+    "lng": -85.145360156895,
+    "maps_url": "https://maps.google.com/?q=1030+COUNTY+ROAD+20%2C+CORUNNA"
+  },
+  {
+    "address": "126 MICHIGAN AVE",
+    "city": "CORUNNA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.43726604046,
+    "lng": -85.145734876556,
+    "maps_url": "https://maps.google.com/?q=126+MICHIGAN+AVE%2C+CORUNNA"
+  },
+  {
+    "address": "108 MAPLE ST",
+    "city": "CORUNNA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.436291383565,
+    "lng": -85.142609999554,
+    "maps_url": "https://maps.google.com/?q=108+MAPLE+ST%2C+CORUNNA"
+  },
+  {
+    "address": "508 S GEORGE ST",
+    "city": "DECATUR",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 39.2341133,
+    "lng": -85.5635062,
+    "maps_url": "https://maps.google.com/?q=508+S+GEORGE+ST%2C+DECATUR"
+  },
+  {
+    "address": "106 CLINTON ST",
+    "city": "DOWAGIAC",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.977055357374,
+    "lng": -86.106124696755,
+    "maps_url": "https://maps.google.com/?q=106+CLINTON+ST%2C+DOWAGIAC"
+  },
+  {
+    "address": "212 CLINTON ST",
+    "city": "DOWAGIAC",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.975894598431,
+    "lng": -86.106140761288,
+    "maps_url": "https://maps.google.com/?q=212+CLINTON+ST%2C+DOWAGIAC"
+  },
+  {
+    "address": "1002 E JACKSON BLVD",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.691521387765,
+    "lng": -85.958354359279,
+    "maps_url": "https://maps.google.com/?q=1002+E+JACKSON+BLVD%2C+ELKHART"
+  },
+  {
+    "address": "30171 COUNTY ROAD 20",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.660907755975,
+    "lng": -86.045265818697,
+    "maps_url": "https://maps.google.com/?q=30171+COUNTY+ROAD+20%2C+ELKHART"
+  },
+  {
+    "address": "63899 COUNTY ROAD 3",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.567142647413,
+    "lng": -86.021554841428,
+    "maps_url": "https://maps.google.com/?q=63899+COUNTY+ROAD+3%2C+ELKHART"
+  },
+  {
+    "address": "24810 CO RD 22",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.637651800845,
+    "lng": -85.942292121119,
+    "maps_url": "https://maps.google.com/?q=24810+CO+RD+22%2C+ELKHART"
+  },
+  {
+    "address": "3816 LEXINGTON PARK DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.691003796038,
+    "lng": -86.028116497787,
+    "maps_url": "https://maps.google.com/?q=3816+LEXINGTON+PARK+DR%2C+ELKHART"
+  },
+  {
+    "address": "22150 COUNTY ROAD 10",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.708085586042,
+    "lng": -85.892222722191,
+    "maps_url": "https://maps.google.com/?q=22150+COUNTY+ROAD+10%2C+ELKHART"
+  },
+  {
+    "address": "28119 LA RUE ST",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.670560781748,
+    "lng": -86.005297654272,
+    "maps_url": "https://maps.google.com/?q=28119+LA+RUE+ST%2C+ELKHART"
+  },
+  {
+    "address": "23232 REBECCA DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.622045158014,
+    "lng": -85.910897582008,
+    "maps_url": "https://maps.google.com/?q=23232+REBECCA+DR%2C+ELKHART"
+  },
+  {
+    "address": "56681 ELM RIDGE RD",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.671233355952,
+    "lng": -86.009220701231,
+    "maps_url": "https://maps.google.com/?q=56681+ELM+RIDGE+RD%2C+ELKHART"
+  },
+  {
+    "address": "56903 PEARL ANN DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.668734282506,
+    "lng": -85.927584023778,
+    "maps_url": "https://maps.google.com/?q=56903+PEARL+ANN+DR%2C+ELKHART"
+  },
+  {
+    "address": "23546 HOLLY DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.699084441951,
+    "lng": -85.918096819584,
+    "maps_url": "https://maps.google.com/?q=23546+HOLLY+DR%2C+ELKHART"
+  },
+  {
+    "address": "56953 COPPERGATE DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.667579551815,
+    "lng": -85.932077257401,
+    "maps_url": "https://maps.google.com/?q=56953+COPPERGATE+DR%2C+ELKHART"
+  },
+  {
+    "address": "1414 GLENWOOD PARK DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.701312661769,
+    "lng": -85.919747371675,
+    "maps_url": "https://maps.google.com/?q=1414+GLENWOOD+PARK+DR%2C+ELKHART"
+  },
+  {
+    "address": "1414 GLENWOOD PARK DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.701312661769,
+    "lng": -85.919747371675,
+    "maps_url": "https://maps.google.com/?q=1414+GLENWOOD+PARK+DR%2C+ELKHART"
+  },
+  {
+    "address": "1414 GLENWOOD PARK DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.701312661769,
+    "lng": -85.919747371675,
+    "maps_url": "https://maps.google.com/?q=1414+GLENWOOD+PARK+DR%2C+ELKHART"
+  },
+  {
+    "address": "1612 E BEARDSLEY AVE",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.699683172433,
+    "lng": -85.953394438341,
+    "maps_url": "https://maps.google.com/?q=1612+E+BEARDSLEY+AVE%2C+ELKHART"
+  },
+  {
+    "address": "22989 LARKSPUR CT",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.710559857964,
+    "lng": -85.907205062541,
+    "maps_url": "https://maps.google.com/?q=22989+LARKSPUR+CT%2C+ELKHART"
+  },
+  {
+    "address": "23457 GREENLEAF BLVD",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.698230661688,
+    "lng": -85.916297655616,
+    "maps_url": "https://maps.google.com/?q=23457+GREENLEAF+BLVD%2C+ELKHART"
+  },
+  {
+    "address": "23464 County Road 26",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.623260801972,
+    "lng": -85.915802451848,
+    "maps_url": "https://maps.google.com/?q=23464+County+Road+26%2C+ELKHART"
+  },
+  {
+    "address": "28189 OTIS AVE",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.655668381772,
+    "lng": -86.006563573784,
+    "maps_url": "https://maps.google.com/?q=28189+OTIS+AVE%2C+ELKHART"
+  },
+  {
+    "address": "28353 LA RUE ST",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.67031152766,
+    "lng": -86.010267501748,
+    "maps_url": "https://maps.google.com/?q=28353+LA+RUE+ST%2C+ELKHART"
+  },
+  {
+    "address": "28353 LA RUE ST",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.67031152766,
+    "lng": -86.010267501748,
+    "maps_url": "https://maps.google.com/?q=28353+LA+RUE+ST%2C+ELKHART"
+  },
+  {
+    "address": "30090 BLAINE AVE",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.670580987158,
+    "lng": -86.04208611882,
+    "maps_url": "https://maps.google.com/?q=30090+BLAINE+AVE%2C+ELKHART"
+  },
+  {
+    "address": "57559 CHARLIE DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.659050267869,
+    "lng": -86.047489381025,
+    "maps_url": "https://maps.google.com/?q=57559+CHARLIE+DR%2C+ELKHART"
+  },
+  {
+    "address": "57883 18TH ST",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.654134466003,
+    "lng": -85.995579940085,
+    "maps_url": "https://maps.google.com/?q=57883+18TH+ST%2C+ELKHART"
+  },
+  {
+    "address": "58200 KREIGHBAUM ST",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.64988269829,
+    "lng": -86.004170773943,
+    "maps_url": "https://maps.google.com/?q=58200+KREIGHBAUM+ST%2C+ELKHART"
+  },
+  {
+    "address": "59642 LEE AVE",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.628473660156,
+    "lng": -85.919276547369,
+    "maps_url": "https://maps.google.com/?q=59642+LEE+AVE%2C+ELKHART"
+  },
+  {
+    "address": "60234 ROBIN HOOD LN",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.619828120227,
+    "lng": -85.91215414181,
+    "maps_url": "https://maps.google.com/?q=60234+ROBIN+HOOD+LN%2C+ELKHART"
+  },
+  {
+    "address": "1565 N BAY DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.703596545347,
+    "lng": -85.935211938561,
+    "maps_url": "https://maps.google.com/?q=1565+N+BAY+DR%2C+ELKHART"
+  },
+  {
+    "address": "1800 N BAY DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.710624936939,
+    "lng": -85.935632492238,
+    "maps_url": "https://maps.google.com/?q=1800+N+BAY+DR%2C+ELKHART"
+  },
+  {
+    "address": "23186 PEMBROOK LN",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.6182177,
+    "lng": -85.913472,
+    "maps_url": "https://maps.google.com/?q=23186+PEMBROOK+LN%2C+ELKHART"
+  },
+  {
+    "address": "23555 HOLLY DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.698462504637,
+    "lng": -85.918983778565,
+    "maps_url": "https://maps.google.com/?q=23555+HOLLY+DR%2C+ELKHART"
+  },
+  {
+    "address": "1316 E JACKSON BLVD",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.692639871682,
+    "lng": -85.953788531775,
+    "maps_url": "https://maps.google.com/?q=1316+E+JACKSON+BLVD%2C+ELKHART"
+  },
+  {
+    "address": "1804 COBBLESTONE BLVD",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.706210048421,
+    "lng": -85.916952602943,
+    "maps_url": "https://maps.google.com/?q=1804+COBBLESTONE+BLVD%2C+ELKHART"
+  },
+  {
+    "address": "2234 BROADMOOR DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.699625095047,
+    "lng": -85.941938607245,
+    "maps_url": "https://maps.google.com/?q=2234+BROADMOOR+DR%2C+ELKHART"
+  },
+  {
+    "address": "3341 CALUMET AVE",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.699632609658,
+    "lng": -85.926633569475,
+    "maps_url": "https://maps.google.com/?q=3341+CALUMET+AVE%2C+ELKHART"
+  },
+  {
+    "address": "3435 CALUMET AVE",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.699613503486,
+    "lng": -85.926001742947,
+    "maps_url": "https://maps.google.com/?q=3435+CALUMET+AVE%2C+ELKHART"
+  },
+  {
+    "address": "4431 MIDWAY RD",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.6233329,
+    "lng": -85.9045221,
+    "maps_url": "https://maps.google.com/?q=4431+MIDWAY+RD%2C+ELKHART"
+  },
+  {
+    "address": "51665 COUNTY ROAD 109",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.743865811865,
+    "lng": -85.957776015774,
+    "maps_url": "https://maps.google.com/?q=51665+COUNTY+ROAD+109%2C+ELKHART"
+  },
+  {
+    "address": "51865 COUNTY ROAD 109",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.740869849373,
+    "lng": -85.957751571366,
+    "maps_url": "https://maps.google.com/?q=51865+COUNTY+ROAD+109%2C+ELKHART"
+  },
+  {
+    "address": "56649 UPPER PKY",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.672126829788,
+    "lng": -86.009840290942,
+    "maps_url": "https://maps.google.com/?q=56649+UPPER+PKY%2C+ELKHART"
+  },
+  {
+    "address": "57702 WEATHERED PINE CT",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.655535588179,
+    "lng": -86.053424048269,
+    "maps_url": "https://maps.google.com/?q=57702+WEATHERED+PINE+CT%2C+ELKHART"
+  },
+  {
+    "address": "1218 CYRILLA DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.699664171245,
+    "lng": -86.025425057433,
+    "maps_url": "https://maps.google.com/?q=1218+CYRILLA+DR%2C+ELKHART"
+  },
+  {
+    "address": "1530 COTTONWOOD DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.703142435876,
+    "lng": -85.929141530025,
+    "maps_url": "https://maps.google.com/?q=1530+COTTONWOOD+DR%2C+ELKHART"
+  },
+  {
+    "address": "1601 SPRINGBROOK DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.702990886842,
+    "lng": -85.937401938953,
+    "maps_url": "https://maps.google.com/?q=1601+SPRINGBROOK+DR%2C+ELKHART"
+  },
+  {
+    "address": "22367 STONEBRIDGE DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.709361377205,
+    "lng": -85.895942878895,
+    "maps_url": "https://maps.google.com/?q=22367+STONEBRIDGE+DR%2C+ELKHART"
+  },
+  {
+    "address": "3018 E LAKE DR N",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.710333216772,
+    "lng": -85.933550896264,
+    "maps_url": "https://maps.google.com/?q=3018+E+LAKE+DR+N%2C+ELKHART"
+  },
+  {
+    "address": "30327 N MEADOW BROOK LN",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.700910386757,
+    "lng": -86.04800784866,
+    "maps_url": "https://maps.google.com/?q=30327+N+MEADOW+BROOK+LN%2C+ELKHART"
+  },
+  {
+    "address": "30327 N MEADOW BROOK LN",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.700910386757,
+    "lng": -86.04800784866,
+    "maps_url": "https://maps.google.com/?q=30327+N+MEADOW+BROOK+LN%2C+ELKHART"
+  },
+  {
+    "address": "3108 BIRCH DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.702503374016,
+    "lng": -85.930340831855,
+    "maps_url": "https://maps.google.com/?q=3108+BIRCH+DR%2C+ELKHART"
+  },
+  {
+    "address": "3202 NEFF ST",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.700783807597,
+    "lng": -85.930142757936,
+    "maps_url": "https://maps.google.com/?q=3202+NEFF+ST%2C+ELKHART"
+  },
+  {
+    "address": "4443 MIDWAY RD",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.6233329,
+    "lng": -85.9045221,
+    "maps_url": "https://maps.google.com/?q=4443+MIDWAY+RD%2C+ELKHART"
+  },
+  {
+    "address": "55922 CHANNEL VIEW DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.682143761245,
+    "lng": -86.027917146032,
+    "maps_url": "https://maps.google.com/?q=55922+CHANNEL+VIEW+DR%2C+ELKHART"
+  },
+  {
+    "address": "58895 HILLCREST DR",
+    "city": "ELKHART",
+    "county": "Elkhart County",
+    "township": "Elkhart Township",
+    "state": "",
+    "lat": 41.639844634762,
+    "lng": -86.001551274182,
+    "maps_url": "https://maps.google.com/?q=58895+HILLCREST+DR%2C+ELKHART"
+  },
+  {
+    "address": "121 N ETNA ST",
+    "city": "ETNA GREEN",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.276754132799,
+    "lng": -86.053029461912,
+    "maps_url": "https://maps.google.com/?q=121+N+ETNA+ST%2C+ETNA+GREEN"
+  },
+  {
+    "address": "2438 55TH ST",
+    "city": "FENNVILLE",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.597666707453,
+    "lng": -86.084873319484,
+    "maps_url": "https://maps.google.com/?q=2438+55TH+ST%2C+FENNVILLE"
+  },
+  {
+    "address": "2495 ORCHARD VALLEY DR",
+    "city": "FENNVILLE",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.597549903633,
+    "lng": -86.081039759678,
+    "maps_url": "https://maps.google.com/?q=2495+ORCHARD+VALLEY+DR%2C+FENNVILLE"
+  },
+  {
+    "address": "123 ALAN DR",
+    "city": "FREMONT",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.730041962654,
+    "lng": -84.917321407055,
+    "maps_url": "https://maps.google.com/?q=123+ALAN+DR%2C+FREMONT"
+  },
+  {
+    "address": "305 W MICHAEL ST",
+    "city": "FREMONT",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.733443364618,
+    "lng": -84.935419562615,
+    "maps_url": "https://maps.google.com/?q=305+W+MICHAEL+ST%2C+FREMONT"
+  },
+  {
+    "address": "35 JANEDALE DR",
+    "city": "FREMONT",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.731323010737,
+    "lng": -84.946175962897,
+    "maps_url": "https://maps.google.com/?q=35+JANEDALE+DR%2C+FREMONT"
+  },
+  {
+    "address": "401 E NORTH ST",
+    "city": "FREMONT",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.732695465934,
+    "lng": -84.928093992259,
+    "maps_url": "https://maps.google.com/?q=401+E+NORTH+ST%2C+FREMONT"
+  },
+  {
+    "address": "402 MICHAEL ST",
+    "city": "FREMONT",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.733549807312,
+    "lng": -84.9366177865,
+    "maps_url": "https://maps.google.com/?q=402+MICHAEL+ST%2C+FREMONT"
+  },
+  {
+    "address": "601 N WAYNE ST",
+    "city": "FREMONT",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.736136550955,
+    "lng": -84.932999323484,
+    "maps_url": "https://maps.google.com/?q=601+N+WAYNE+ST%2C+FREMONT"
+  },
+  {
+    "address": "316 E NORTH A ST",
+    "city": "GAS CITY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.488783988885,
+    "lng": -85.610643844987,
+    "maps_url": "https://maps.google.com/?q=316+E+NORTH+A+ST%2C+GAS+CITY"
+  },
+  {
+    "address": "316 E NORTH A ST",
+    "city": "GAS CITY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.488783988885,
+    "lng": -85.610643844987,
+    "maps_url": "https://maps.google.com/?q=316+E+NORTH+A+ST%2C+GAS+CITY"
+  },
+  {
+    "address": "507 E SOUTH C ST",
+    "city": "GAS CITY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.485086721418,
+    "lng": -85.606624501811,
+    "maps_url": "https://maps.google.com/?q=507+E+SOUTH+C+ST%2C+GAS+CITY"
+  },
+  {
+    "address": "507 E SOUTH C ST",
+    "city": "GAS CITY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.485086721418,
+    "lng": -85.606624501811,
+    "maps_url": "https://maps.google.com/?q=507+E+SOUTH+C+ST%2C+GAS+CITY"
+  },
+  {
+    "address": "1101 Olynger RD",
+    "city": "GAS CITY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.4853381298,
+    "lng": -85.594142337738,
+    "maps_url": "https://maps.google.com/?q=1101+Olynger+RD%2C+GAS+CITY"
+  },
+  {
+    "address": "121 E SOUTH B ST",
+    "city": "GAS CITY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.48604558099,
+    "lng": -85.614809700741,
+    "maps_url": "https://maps.google.com/?q=121+E+SOUTH+B+ST%2C+GAS+CITY"
+  },
+  {
+    "address": "9 JACKS ST",
+    "city": "GAS CITY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.481575855733,
+    "lng": -85.601492352424,
+    "maps_url": "https://maps.google.com/?q=9+JACKS+ST%2C+GAS+CITY"
+  },
+  {
+    "address": "1023 CANDY CREEK CT",
+    "city": "GAS CITY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.492711201736,
+    "lng": -85.593655007496,
+    "maps_url": "https://maps.google.com/?q=1023+CANDY+CREEK+CT%2C+GAS+CITY"
+  },
+  {
+    "address": "218 E NORTH D ST",
+    "city": "GAS CITY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.491636988472,
+    "lng": -85.612723854792,
+    "maps_url": "https://maps.google.com/?q=218+E+NORTH+D+ST%2C+GAS+CITY"
+  },
+  {
+    "address": "218 E NORTH D ST",
+    "city": "GAS CITY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.491636988472,
+    "lng": -85.612723854792,
+    "maps_url": "https://maps.google.com/?q=218+E+NORTH+D+ST%2C+GAS+CITY"
+  },
+  {
+    "address": "621 E SOUTH G ST",
+    "city": "GAS CITY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.481331365797,
+    "lng": -85.604228249072,
+    "maps_url": "https://maps.google.com/?q=621+E+SOUTH+G+ST%2C+GAS+CITY"
+  },
+  {
+    "address": "227 E SOUTH F ST",
+    "city": "GAS CITY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.482247581559,
+    "lng": -85.612424352632,
+    "maps_url": "https://maps.google.com/?q=227+E+SOUTH+F+ST%2C+GAS+CITY"
+  },
+  {
+    "address": "227 E SOUTH F ST",
+    "city": "GAS CITY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.482247581559,
+    "lng": -85.612424352632,
+    "maps_url": "https://maps.google.com/?q=227+E+SOUTH+F+ST%2C+GAS+CITY"
+  },
+  {
+    "address": "405 E NORTH C ST",
+    "city": "GAS CITY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.490806579822,
+    "lng": -85.608796400583,
+    "maps_url": "https://maps.google.com/?q=405+E+NORTH+C+ST%2C+GAS+CITY"
+  },
+  {
+    "address": "926 JONES RD",
+    "city": "GAS CITY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.486631051709,
+    "lng": -85.599138379145,
+    "maps_url": "https://maps.google.com/?q=926+JONES+RD%2C+GAS+CITY"
+  },
+  {
+    "address": "19577 HERITAGE WAY",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.659334454283,
+    "lng": -85.844160139554,
+    "maps_url": "https://maps.google.com/?q=19577+HERITAGE+WAY%2C+GOSHEN"
+  },
+  {
+    "address": "19577 HERITAGE WAY",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.659334454283,
+    "lng": -85.844160139554,
+    "maps_url": "https://maps.google.com/?q=19577+HERITAGE+WAY%2C+GOSHEN"
+  },
+  {
+    "address": "57077 COUNTY ROAD 117",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.665141318631,
+    "lng": -85.879963183321,
+    "maps_url": "https://maps.google.com/?q=57077+COUNTY+ROAD+117%2C+GOSHEN"
+  },
+  {
+    "address": "22531 COUNTY ROAD 36",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.56584905497,
+    "lng": -85.897432646159,
+    "maps_url": "https://maps.google.com/?q=22531+COUNTY+ROAD+36%2C+GOSHEN"
+  },
+  {
+    "address": "64742 COUNTY ROAD 19",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.555299006825,
+    "lng": -85.866818546275,
+    "maps_url": "https://maps.google.com/?q=64742+COUNTY+ROAD+19%2C+GOSHEN"
+  },
+  {
+    "address": "64314 LIMBERLOST DR",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.560982211289,
+    "lng": -85.840959698919,
+    "maps_url": "https://maps.google.com/?q=64314+LIMBERLOST+DR%2C+GOSHEN"
+  },
+  {
+    "address": "2504 S MAIN ST",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.553032762323,
+    "lng": -85.828186991381,
+    "maps_url": "https://maps.google.com/?q=2504+S+MAIN+ST%2C+GOSHEN"
+  },
+  {
+    "address": "1802 BERKEY AVE",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.580546806606,
+    "lng": -85.861267130213,
+    "maps_url": "https://maps.google.com/?q=1802+BERKEY+AVE%2C+GOSHEN"
+  },
+  {
+    "address": "1609 S 15TH ST",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.567311496272,
+    "lng": -85.81828574704,
+    "maps_url": "https://maps.google.com/?q=1609+S+15TH+ST%2C+GOSHEN"
+  },
+  {
+    "address": "1609 S 15TH ST",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.567311496272,
+    "lng": -85.81828574704,
+    "maps_url": "https://maps.google.com/?q=1609+S+15TH+ST%2C+GOSHEN"
+  },
+  {
+    "address": "23879 Co Rd 38",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.551321576752,
+    "lng": -85.922694042598,
+    "maps_url": "https://maps.google.com/?q=23879+Co+Rd+38%2C+GOSHEN"
+  },
+  {
+    "address": "56487 COUNTY ROAD 31",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.669794857164,
+    "lng": -85.772798522986,
+    "maps_url": "https://maps.google.com/?q=56487+COUNTY+ROAD+31%2C+GOSHEN"
+  },
+  {
+    "address": "63531 CO RD 9",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.572237361391,
+    "lng": -85.963765292155,
+    "maps_url": "https://maps.google.com/?q=63531+CO+RD+9%2C+GOSHEN"
+  },
+  {
+    "address": "68515 COUNTY ROAD 33",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.502337350424,
+    "lng": -85.752154400282,
+    "maps_url": "https://maps.google.com/?q=68515+COUNTY+ROAD+33%2C+GOSHEN"
+  },
+  {
+    "address": "917 S 15TH ST",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.574814154728,
+    "lng": -85.818418302795,
+    "maps_url": "https://maps.google.com/?q=917+S+15TH+ST%2C+GOSHEN"
+  },
+  {
+    "address": "1727 KEYSTONE DR",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.564175796707,
+    "lng": -85.807718397765,
+    "maps_url": "https://maps.google.com/?q=1727+KEYSTONE+DR%2C+GOSHEN"
+  },
+  {
+    "address": "1301 MINTCREST DR",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.569281518282,
+    "lng": -85.854101853692,
+    "maps_url": "https://maps.google.com/?q=1301+MINTCREST+DR%2C+GOSHEN"
+  },
+  {
+    "address": "1308 MINTCREST DR",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.569215055752,
+    "lng": -85.853947992694,
+    "maps_url": "https://maps.google.com/?q=1308+MINTCREST+DR%2C+GOSHEN"
+  },
+  {
+    "address": "15607 CO RD 44",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.509321767221,
+    "lng": -85.762837578303,
+    "maps_url": "https://maps.google.com/?q=15607+CO+RD+44%2C+GOSHEN"
+  },
+  {
+    "address": "1302 MINTCREST DR",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.569258936174,
+    "lng": -85.853948449778,
+    "maps_url": "https://maps.google.com/?q=1302+MINTCREST+DR%2C+GOSHEN"
+  },
+  {
+    "address": "61388 CO RD 35",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.604707877032,
+    "lng": -85.733798299753,
+    "maps_url": "https://maps.google.com/?q=61388+CO+RD+35%2C+GOSHEN"
+  },
+  {
+    "address": "65706 COUNTY ROAD 27",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.540541920607,
+    "lng": -85.804098088933,
+    "maps_url": "https://maps.google.com/?q=65706+COUNTY+ROAD+27%2C+GOSHEN"
+  },
+  {
+    "address": "1301 BERKEY AVE",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.580643397526,
+    "lng": -85.85254740226,
+    "maps_url": "https://maps.google.com/?q=1301+BERKEY+AVE%2C+GOSHEN"
+  },
+  {
+    "address": "1629 WILLIAM HENRY LN",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.606815229711,
+    "lng": -85.896193556989,
+    "maps_url": "https://maps.google.com/?q=1629+WILLIAM+HENRY+LN%2C+GOSHEN"
+  },
+  {
+    "address": "19746 EDGEWATER DR",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.563302808676,
+    "lng": -85.842927822401,
+    "maps_url": "https://maps.google.com/?q=19746+EDGEWATER+DR%2C+GOSHEN"
+  },
+  {
+    "address": "22198 MOHAWK DR",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.610048803001,
+    "lng": -85.891310160531,
+    "maps_url": "https://maps.google.com/?q=22198+MOHAWK+DR%2C+GOSHEN"
+  },
+  {
+    "address": "22231 MOHAWK DR",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.610163394386,
+    "lng": -85.891466431451,
+    "maps_url": "https://maps.google.com/?q=22231+MOHAWK+DR%2C+GOSHEN"
+  },
+  {
+    "address": "62362 COUNTY ROAD 29",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.588824599269,
+    "lng": -85.786024311208,
+    "maps_url": "https://maps.google.com/?q=62362+COUNTY+ROAD+29%2C+GOSHEN"
+  },
+  {
+    "address": "19746 EDGEWATER DR",
+    "city": "GOSHEN",
+    "county": "Elkhart County",
+    "township": "Goshen Township",
+    "state": "",
+    "lat": 41.563302808676,
+    "lng": -85.842927822401,
+    "maps_url": "https://maps.google.com/?q=19746+EDGEWATER+DR%2C+GOSHEN"
+  },
+  {
+    "address": "16355 COMSTOCK ST",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.037635165013,
+    "lng": -86.193848615327,
+    "maps_url": "https://maps.google.com/?q=16355+COMSTOCK+ST%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15219 MERCURY DR",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.035785225323,
+    "lng": -86.1658687049,
+    "maps_url": "https://maps.google.com/?q=15219+MERCURY+DR%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "14474 ANGELUS CIR",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.031709986947,
+    "lng": -86.182035785267,
+    "maps_url": "https://maps.google.com/?q=14474+ANGELUS+CIR%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "14640 154TH AVE",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.035328335279,
+    "lng": -86.169750884777,
+    "maps_url": "https://maps.google.com/?q=14640+154TH+AVE%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15280 ROBBINS RD",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.044793938802,
+    "lng": -86.168109141625,
+    "maps_url": "https://maps.google.com/?q=15280+ROBBINS+RD%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15922 CEDAR ST",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.048465191853,
+    "lng": -86.183478818172,
+    "maps_url": "https://maps.google.com/?q=15922+CEDAR+ST%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "925 S BEECHTREE ST",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.052796135989,
+    "lng": -86.205741220351,
+    "maps_url": "https://maps.google.com/?q=925+S+BEECHTREE+ST%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "14821 160TH AVE",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.038004265977,
+    "lng": -86.185351914299,
+    "maps_url": "https://maps.google.com/?q=14821+160TH+AVE%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "14894 BLUEBIRD LN",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.039076979182,
+    "lng": -86.168797511542,
+    "maps_url": "https://maps.google.com/?q=14894+BLUEBIRD+LN%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15077 154TH AVE",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.042141797555,
+    "lng": -86.171568862465,
+    "maps_url": "https://maps.google.com/?q=15077+154TH+AVE%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15325 COVE ST",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.033617858783,
+    "lng": -86.168722164146,
+    "maps_url": "https://maps.google.com/?q=15325+COVE+ST%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15332 COVE ST",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.033522972366,
+    "lng": -86.168467298005,
+    "maps_url": "https://maps.google.com/?q=15332+COVE+ST%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "14903 BLUEBIRD LN",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.03866433248,
+    "lng": -86.168344928746,
+    "maps_url": "https://maps.google.com/?q=14903+BLUEBIRD+LN%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "706 VERHOEKS ST",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.057029950107,
+    "lng": -86.22175823591,
+    "maps_url": "https://maps.google.com/?q=706+VERHOEKS+ST%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15343 MEADOWLARK DR",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.040020163233,
+    "lng": -86.169097188499,
+    "maps_url": "https://maps.google.com/?q=15343+MEADOWLARK+DR%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15343 MEADOWLARK DR",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.040020163233,
+    "lng": -86.169097188499,
+    "maps_url": "https://maps.google.com/?q=15343+MEADOWLARK+DR%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15360 COVE ST",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.033374125693,
+    "lng": -86.169007138708,
+    "maps_url": "https://maps.google.com/?q=15360+COVE+ST%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15480 HARRY ST",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.042643949359,
+    "lng": -86.172439856905,
+    "maps_url": "https://maps.google.com/?q=15480+HARRY+ST%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15285 MERCURY DR",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.036638053171,
+    "lng": -86.167239179026,
+    "maps_url": "https://maps.google.com/?q=15285+MERCURY+DR%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15417 HARRY ST",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.042399361211,
+    "lng": -86.169962446449,
+    "maps_url": "https://maps.google.com/?q=15417+HARRY+ST%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15127 154TH AVE",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.042696335687,
+    "lng": -86.171579180195,
+    "maps_url": "https://maps.google.com/?q=15127+154TH+AVE%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15231 MERCURY DR",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.035940284932,
+    "lng": -86.166117882013,
+    "maps_url": "https://maps.google.com/?q=15231+MERCURY+DR%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15348 CANARY DR",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.040784216033,
+    "lng": -86.170431438593,
+    "maps_url": "https://maps.google.com/?q=15348+CANARY+DR%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15360 COMSTOCK ST",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.037545919312,
+    "lng": -86.169481649468,
+    "maps_url": "https://maps.google.com/?q=15360+COMSTOCK+ST%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "1705 S GRIFFIN ST",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.04560096902,
+    "lng": -86.210641184356,
+    "maps_url": "https://maps.google.com/?q=1705+S+GRIFFIN+ST%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "14915 ROBINWOOD CT",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.040202326719,
+    "lng": -86.178805858291,
+    "maps_url": "https://maps.google.com/?q=14915+ROBINWOOD+CT%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15555 COMSTOCK ST",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.037658768145,
+    "lng": -86.174843066337,
+    "maps_url": "https://maps.google.com/?q=15555+COMSTOCK+ST%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "14880 BLUEBIRD LN",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.039001368088,
+    "lng": -86.168668705069,
+    "maps_url": "https://maps.google.com/?q=14880+BLUEBIRD+LN%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15074 155TH AVE",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.042186379492,
+    "lng": -86.173098656895,
+    "maps_url": "https://maps.google.com/?q=15074+155TH+AVE%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15137 152ND AVE",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.043275690482,
+    "lng": -86.165727846655,
+    "maps_url": "https://maps.google.com/?q=15137+152ND+AVE%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15303 HARRY ST",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.042410791151,
+    "lng": -86.167714236808,
+    "maps_url": "https://maps.google.com/?q=15303+HARRY+ST%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15395 COLEMAN AVE",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.047512678559,
+    "lng": -86.189948316693,
+    "maps_url": "https://maps.google.com/?q=15395+COLEMAN+AVE%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15395 COLEMAN AVE",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.047512678559,
+    "lng": -86.189948316693,
+    "maps_url": "https://maps.google.com/?q=15395+COLEMAN+AVE%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15322 CHANNEL DR",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.046138744597,
+    "lng": -86.173636987946,
+    "maps_url": "https://maps.google.com/?q=15322+CHANNEL+DR%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15323 CHANNEL DR",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.046137349017,
+    "lng": -86.173793782372,
+    "maps_url": "https://maps.google.com/?q=15323+CHANNEL+DR%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "15725 RONNY RD",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.053433266632,
+    "lng": -86.190241432503,
+    "maps_url": "https://maps.google.com/?q=15725+RONNY+RD%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "1040 FULTON AVE",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.062661952537,
+    "lng": -86.21718477305,
+    "maps_url": "https://maps.google.com/?q=1040+FULTON+AVE%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "14735 160TH AVE",
+    "city": "GRAND HAVEN",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 43.036231468945,
+    "lng": -86.185319928427,
+    "maps_url": "https://maps.google.com/?q=14735+160TH+AVE%2C+GRAND+HAVEN"
+  },
+  {
+    "address": "6468 PARIS AVE SE",
+    "city": "GRAND RAPIDS",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.846768937004,
+    "lng": -85.650308594653,
+    "maps_url": "https://maps.google.com/?q=6468+PARIS+AVE+SE%2C+GRAND+RAPIDS"
+  },
+  {
+    "address": "337 COUNTY ROAD 11",
+    "city": "HUDSON",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.518199499057,
+    "lng": -85.135593881567,
+    "maps_url": "https://maps.google.com/?q=337+COUNTY+ROAD+11%2C+HUDSON"
+  },
+  {
+    "address": "424 1ST ST",
+    "city": "HUDSON",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.533318625285,
+    "lng": -85.082338414627,
+    "maps_url": "https://maps.google.com/?q=424+1ST+ST%2C+HUDSON"
+  },
+  {
+    "address": "2 AMPHLETT TER",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.983805245433,
+    "lng": -85.065314479504,
+    "maps_url": "https://maps.google.com/?q=2+AMPHLETT+TER%2C+IONIA"
+  },
+  {
+    "address": "821 E WASHINGTON ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.985227886412,
+    "lng": -85.043507497764,
+    "maps_url": "https://maps.google.com/?q=821+E+WASHINGTON+ST%2C+IONIA"
+  },
+  {
+    "address": "821 E WASHINGTON ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.985227886412,
+    "lng": -85.043507497764,
+    "maps_url": "https://maps.google.com/?q=821+E+WASHINGTON+ST%2C+IONIA"
+  },
+  {
+    "address": "826 E WASHINGTON ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.985323139419,
+    "lng": -85.044129672009,
+    "maps_url": "https://maps.google.com/?q=826+E+WASHINGTON+ST%2C+IONIA"
+  },
+  {
+    "address": "806 E MAIN ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.983073263803,
+    "lng": -85.043354336473,
+    "maps_url": "https://maps.google.com/?q=806+E+MAIN+ST%2C+IONIA"
+  },
+  {
+    "address": "250 E WASHINGTON ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.984110063786,
+    "lng": -85.058531699809,
+    "maps_url": "https://maps.google.com/?q=250+E+WASHINGTON+ST%2C+IONIA"
+  },
+  {
+    "address": "425 MORSE ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.987733823038,
+    "lng": -85.04963223778,
+    "maps_url": "https://maps.google.com/?q=425+MORSE+ST%2C+IONIA"
+  },
+  {
+    "address": "926 YEOMANS ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.983778310921,
+    "lng": -85.079812420923,
+    "maps_url": "https://maps.google.com/?q=926+YEOMANS+ST%2C+IONIA"
+  },
+  {
+    "address": "227 UNION ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.984560823944,
+    "lng": -85.063535627574,
+    "maps_url": "https://maps.google.com/?q=227+UNION+ST%2C+IONIA"
+  },
+  {
+    "address": "227 UNION ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.984560823944,
+    "lng": -85.063535627574,
+    "maps_url": "https://maps.google.com/?q=227+UNION+ST%2C+IONIA"
+  },
+  {
+    "address": "227 UNION ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.984560823944,
+    "lng": -85.063535627574,
+    "maps_url": "https://maps.google.com/?q=227+UNION+ST%2C+IONIA"
+  },
+  {
+    "address": "521 MORSE ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.989561016713,
+    "lng": -85.049627339763,
+    "maps_url": "https://maps.google.com/?q=521+MORSE+ST%2C+IONIA"
+  },
+  {
+    "address": "208 HIGH ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.984643164627,
+    "lng": -85.065756265977,
+    "maps_url": "https://maps.google.com/?q=208+HIGH+ST%2C+IONIA"
+  },
+  {
+    "address": "633 MORSE ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.991357311241,
+    "lng": -85.049645466448,
+    "maps_url": "https://maps.google.com/?q=633+MORSE+ST%2C+IONIA"
+  },
+  {
+    "address": "640 W WASHINGTON ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.982912700313,
+    "lng": -85.073181583376,
+    "maps_url": "https://maps.google.com/?q=640+W+WASHINGTON+ST%2C+IONIA"
+  },
+  {
+    "address": "441 RICE ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.985696010177,
+    "lng": -85.078381664639,
+    "maps_url": "https://maps.google.com/?q=441+RICE+ST%2C+IONIA"
+  },
+  {
+    "address": "721 CHAPMAN ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.990207520338,
+    "lng": -85.076125649629,
+    "maps_url": "https://maps.google.com/?q=721+CHAPMAN+ST%2C+IONIA"
+  },
+  {
+    "address": "850 W MAIN ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.981574811745,
+    "lng": -85.077538187991,
+    "maps_url": "https://maps.google.com/?q=850+W+MAIN+ST%2C+IONIA"
+  },
+  {
+    "address": "117 VANDERHEYDEN CT",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.980331485405,
+    "lng": -85.080890844947,
+    "maps_url": "https://maps.google.com/?q=117+VANDERHEYDEN+CT%2C+IONIA"
+  },
+  {
+    "address": "223 E WASHINGTON ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.983915511688,
+    "lng": -85.059404018897,
+    "maps_url": "https://maps.google.com/?q=223+E+WASHINGTON+ST%2C+IONIA"
+  },
+  {
+    "address": "445 ALLEN ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.990377509318,
+    "lng": -85.052529132085,
+    "maps_url": "https://maps.google.com/?q=445+ALLEN+ST%2C+IONIA"
+  },
+  {
+    "address": "739 HARRISON ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.981443241646,
+    "lng": -85.045939086553,
+    "maps_url": "https://maps.google.com/?q=739+HARRISON+ST%2C+IONIA"
+  },
+  {
+    "address": "809 W WASHINGTON ST",
+    "city": "IONIA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.982527238424,
+    "lng": -85.076990410544,
+    "maps_url": "https://maps.google.com/?q=809+W+WASHINGTON+ST%2C+IONIA"
+  },
+  {
+    "address": "2821 S SANDSTONE RD",
+    "city": "JACKSON",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.22545673435,
+    "lng": -84.516671292797,
+    "maps_url": "https://maps.google.com/?q=2821+S+SANDSTONE+RD%2C+JACKSON"
+  },
+  {
+    "address": "5764 HIGHLAND BELL DR",
+    "city": "JACKSON",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.219634215417,
+    "lng": -84.517690892985,
+    "maps_url": "https://maps.google.com/?q=5764+HIGHLAND+BELL+DR%2C+JACKSON"
+  },
+  {
+    "address": "2922 S SANDSTONE RD",
+    "city": "JACKSON",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.22176880424,
+    "lng": -84.516726211083,
+    "maps_url": "https://maps.google.com/?q=2922+S+SANDSTONE+RD%2C+JACKSON"
+  },
+  {
+    "address": "6688 SPRING ARBOR RD",
+    "city": "JACKSON",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.216579441468,
+    "lng": -84.516337112865,
+    "maps_url": "https://maps.google.com/?q=6688+SPRING+ARBOR+RD%2C+JACKSON"
+  },
+  {
+    "address": "904 S WATER ST",
+    "city": "JONESBORO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.477023242457,
+    "lng": -85.626742625342,
+    "maps_url": "https://maps.google.com/?q=904+S+WATER+ST%2C+JONESBORO"
+  },
+  {
+    "address": "603 W 6TH ST",
+    "city": "JONESBORO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.480431991663,
+    "lng": -85.635620360655,
+    "maps_url": "https://maps.google.com/?q=603+W+6TH+ST%2C+JONESBORO"
+  },
+  {
+    "address": "905 S WATER ST",
+    "city": "JONESBORO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.477021499337,
+    "lng": -85.626591996524,
+    "maps_url": "https://maps.google.com/?q=905+S+WATER+ST%2C+JONESBORO"
+  },
+  {
+    "address": "912 S Water ST",
+    "city": "JONESBORO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.476953987346,
+    "lng": -85.62674401045,
+    "maps_url": "https://maps.google.com/?q=912+S+Water+ST%2C+JONESBORO"
+  },
+  {
+    "address": "304 S WATER ST",
+    "city": "JONESBORO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.483549310957,
+    "lng": -85.626620807157,
+    "maps_url": "https://maps.google.com/?q=304+S+WATER+ST%2C+JONESBORO"
+  },
+  {
+    "address": "5247 S 150 E",
+    "city": "JONESBORO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.475380731259,
+    "lng": -85.644594644752,
+    "maps_url": "https://maps.google.com/?q=5247+S+150+E%2C+JONESBORO"
+  },
+  {
+    "address": "107 S MICHIGAN ST",
+    "city": "LA PAZ",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.4568641,
+    "lng": -86.3085881,
+    "maps_url": "https://maps.google.com/?q=107+S+MICHIGAN+ST%2C+LA+PAZ"
+  },
+  {
+    "address": "5621 E 400 N",
+    "city": "LANDESS",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.6110537,
+    "lng": -85.5683299,
+    "maps_url": "https://maps.google.com/?q=5621+E+400+N%2C+LANDESS"
+  },
+  {
+    "address": "5942 E 450 N",
+    "city": "LANDESS",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.6170728,
+    "lng": -85.5481712,
+    "maps_url": "https://maps.google.com/?q=5942+E+450+N%2C+LANDESS"
+  },
+  {
+    "address": "6193 E 400 N",
+    "city": "LANDESS",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.6100123,
+    "lng": -85.5574126,
+    "maps_url": "https://maps.google.com/?q=6193+E+400+N%2C+LANDESS"
+  },
+  {
+    "address": "1102 S RACE ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.550921767039,
+    "lng": -85.664617361114,
+    "maps_url": "https://maps.google.com/?q=1102+S+RACE+ST%2C+MARION"
+  },
+  {
+    "address": "1503 S BRITTON ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.547402951586,
+    "lng": -85.670190551394,
+    "maps_url": "https://maps.google.com/?q=1503+S+BRITTON+ST%2C+MARION"
+  },
+  {
+    "address": "628 W 17TH ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.545733572802,
+    "lng": -85.66702310254,
+    "maps_url": "https://maps.google.com/?q=628+W+17TH+ST%2C+MARION"
+  },
+  {
+    "address": "2738 S 550 E",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.513022616319,
+    "lng": -85.568451958881,
+    "maps_url": "https://maps.google.com/?q=2738+S+550+E%2C+MARION"
+  },
+  {
+    "address": "813 W 600 N",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.540282949043,
+    "lng": -85.787523975783,
+    "maps_url": "https://maps.google.com/?q=813+W+600+N%2C+MARION"
+  },
+  {
+    "address": "813 W 600 N",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.540282949043,
+    "lng": -85.787523975783,
+    "maps_url": "https://maps.google.com/?q=813+W+600+N%2C+MARION"
+  },
+  {
+    "address": "244 W 600 N",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.548450655186,
+    "lng": -85.787668720376,
+    "maps_url": "https://maps.google.com/?q=244+W+600+N%2C+MARION"
+  },
+  {
+    "address": "420 W 30TH ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.533841947074,
+    "lng": -85.664554962283,
+    "maps_url": "https://maps.google.com/?q=420+W+30TH+ST%2C+MARION"
+  },
+  {
+    "address": "5718 N LAGRO RD",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.635647799225,
+    "lng": -85.681761501803,
+    "maps_url": "https://maps.google.com/?q=5718+N+LAGRO+RD%2C+MARION"
+  },
+  {
+    "address": "5871 N LAGRO RD",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.637789166121,
+    "lng": -85.683074651567,
+    "maps_url": "https://maps.google.com/?q=5871+N+LAGRO+RD%2C+MARION"
+  },
+  {
+    "address": "814 W 12TH ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.550116958508,
+    "lng": -85.668376813772,
+    "maps_url": "https://maps.google.com/?q=814+W+12TH+ST%2C+MARION"
+  },
+  {
+    "address": "1492 S 600 E",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.466020588964,
+    "lng": -85.70070586283,
+    "maps_url": "https://maps.google.com/?q=1492+S+600+E%2C+MARION"
+  },
+  {
+    "address": "2507 S SELBY ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.538440912911,
+    "lng": -85.665955871404,
+    "maps_url": "https://maps.google.com/?q=2507+S+SELBY+ST%2C+MARION"
+  },
+  {
+    "address": "3271 N 600 E. ⚠️",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.600400016212,
+    "lng": -85.560849274283,
+    "maps_url": "https://maps.google.com/?q=3271+N+600+E.+%E2%9A%A0%EF%B8%8F%2C+MARION"
+  },
+  {
+    "address": "501 E 29TH ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.535473574063,
+    "lng": -85.655196570414,
+    "maps_url": "https://maps.google.com/?q=501+E+29TH+ST%2C+MARION"
+  },
+  {
+    "address": "5740 N 100 W",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.566853139789,
+    "lng": -85.561691920552,
+    "maps_url": "https://maps.google.com/?q=5740+N+100+W%2C+MARION"
+  },
+  {
+    "address": "618 W 12TH ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.550125571976,
+    "lng": -85.666429013212,
+    "maps_url": "https://maps.google.com/?q=618+W+12TH+ST%2C+MARION"
+  },
+  {
+    "address": "733 W 14TH ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.548336980951,
+    "lng": -85.66737224324,
+    "maps_url": "https://maps.google.com/?q=733+W+14TH+ST%2C+MARION"
+  },
+  {
+    "address": "1604 S HILL ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.54651281384,
+    "lng": -85.667029355837,
+    "maps_url": "https://maps.google.com/?q=1604+S+HILL+ST%2C+MARION"
+  },
+  {
+    "address": "507 W 26TH ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.537382915981,
+    "lng": -85.665006088945,
+    "maps_url": "https://maps.google.com/?q=507+W+26TH+ST%2C+MARION"
+  },
+  {
+    "address": "815 W 12TH ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.55000251366,
+    "lng": -85.66836918982,
+    "maps_url": "https://maps.google.com/?q=815+W+12TH+ST%2C+MARION"
+  },
+  {
+    "address": "1103 S Boots ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.550946980153,
+    "lng": -85.660956549863,
+    "maps_url": "https://maps.google.com/?q=1103+S+Boots+ST%2C+MARION"
+  },
+  {
+    "address": "1850 W 16TH ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.545474215725,
+    "lng": -85.684438097491,
+    "maps_url": "https://maps.google.com/?q=1850+W+16TH+ST%2C+MARION"
+  },
+  {
+    "address": "412 W 11TH ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.551052571664,
+    "lng": -85.663587955811,
+    "maps_url": "https://maps.google.com/?q=412+W+11TH+ST%2C+MARION"
+  },
+  {
+    "address": "908 W 10TH ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.551925571806,
+    "lng": -85.669497565233,
+    "maps_url": "https://maps.google.com/?q=908+W+10TH+ST%2C+MARION"
+  },
+  {
+    "address": "1008 S HENDRICKS AVE",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.551456327493,
+    "lng": -85.691398268638,
+    "maps_url": "https://maps.google.com/?q=1008+S+HENDRICKS+AVE%2C+MARION"
+  },
+  {
+    "address": "1454 S 525 E",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.532718185354,
+    "lng": -85.573303875174,
+    "maps_url": "https://maps.google.com/?q=1454+S+525+E%2C+MARION"
+  },
+  {
+    "address": "1607 W 10TH ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.551707941289,
+    "lng": -85.67921247067,
+    "maps_url": "https://maps.google.com/?q=1607+W+10TH+ST%2C+MARION"
+  },
+  {
+    "address": "2030 N FAIRFIELD DR",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.547902573521,
+    "lng": -85.688964073391,
+    "maps_url": "https://maps.google.com/?q=2030+N+FAIRFIELD+DR%2C+MARION"
+  },
+  {
+    "address": "2030 N FAIRFIELD DR",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.547902573521,
+    "lng": -85.688964073391,
+    "maps_url": "https://maps.google.com/?q=2030+N+FAIRFIELD+DR%2C+MARION"
+  },
+  {
+    "address": "2142 N BETHLEHEM RD",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.583586591578,
+    "lng": -85.61737135892,
+    "maps_url": "https://maps.google.com/?q=2142+N+BETHLEHEM+RD%2C+MARION"
+  },
+  {
+    "address": "1112 S MAPLE ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.550814808063,
+    "lng": -85.668226360022,
+    "maps_url": "https://maps.google.com/?q=1112+S+MAPLE+ST%2C+MARION"
+  },
+  {
+    "address": "1216 S D ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.549872281412,
+    "lng": -85.669405358528,
+    "maps_url": "https://maps.google.com/?q=1216+S+D+ST%2C+MARION"
+  },
+  {
+    "address": "1717 S BRANSON ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.545469807158,
+    "lng": -85.657275557603,
+    "maps_url": "https://maps.google.com/?q=1717+S+BRANSON+ST%2C+MARION"
+  },
+  {
+    "address": "302 W 600 N",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.547616392294,
+    "lng": -85.787661193042,
+    "maps_url": "https://maps.google.com/?q=302+W+600+N%2C+MARION"
+  },
+  {
+    "address": "501 W 30TH ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.533720419487,
+    "lng": -85.66479659373,
+    "maps_url": "https://maps.google.com/?q=501+W+30TH+ST%2C+MARION"
+  },
+  {
+    "address": "5767 N LAGRO RD",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.6362961401,
+    "lng": -85.682267581698,
+    "maps_url": "https://maps.google.com/?q=5767+N+LAGRO+RD%2C+MARION"
+  },
+  {
+    "address": "1025 S GALLATIN ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.551653164354,
+    "lng": -85.662115434145,
+    "maps_url": "https://maps.google.com/?q=1025+S+GALLATIN+ST%2C+MARION"
+  },
+  {
+    "address": "1084 E 450 N",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.617948921444,
+    "lng": -85.655284289598,
+    "maps_url": "https://maps.google.com/?q=1084+E+450+N%2C+MARION"
+  },
+  {
+    "address": "1204 W 11TH ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.550989146037,
+    "lng": -85.672843931026,
+    "maps_url": "https://maps.google.com/?q=1204+W+11TH+ST%2C+MARION"
+  },
+  {
+    "address": "2008 W 11TH ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.550710572945,
+    "lng": -85.687644308069,
+    "maps_url": "https://maps.google.com/?q=2008+W+11TH+ST%2C+MARION"
+  },
+  {
+    "address": "2156 W 9TH ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.552587252296,
+    "lng": -85.691633874924,
+    "maps_url": "https://maps.google.com/?q=2156+W+9TH+ST%2C+MARION"
+  },
+  {
+    "address": "2156 W 9TH ST",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.552587252296,
+    "lng": -85.691633874924,
+    "maps_url": "https://maps.google.com/?q=2156+W+9TH+ST%2C+MARION"
+  },
+  {
+    "address": "2181 E 600 N",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.583972932188,
+    "lng": -85.560505435126,
+    "maps_url": "https://maps.google.com/?q=2181+E+600+N%2C+MARION"
+  },
+  {
+    "address": "5435 N HUNTINGTON RD",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.632213633617,
+    "lng": -85.634207709261,
+    "maps_url": "https://maps.google.com/?q=5435+N+HUNTINGTON+RD%2C+MARION"
+  },
+  {
+    "address": "1502 E MARTHA DR",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.616975314759,
+    "lng": -85.646707128565,
+    "maps_url": "https://maps.google.com/?q=1502+E+MARTHA+DR%2C+MARION"
+  },
+  {
+    "address": "3572 E 200 N",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.581609971842,
+    "lng": -85.60652399712,
+    "maps_url": "https://maps.google.com/?q=3572+E+200+N%2C+MARION"
+  },
+  {
+    "address": "4863 E 200 N",
+    "city": "MARION",
+    "county": "Grant County",
+    "township": "Marion Township",
+    "state": "",
+    "lat": 40.58161854375,
+    "lng": -85.582212845538,
+    "maps_url": "https://maps.google.com/?q=4863+E+200+N%2C+MARION"
+  },
+  {
+    "address": "999 Spring Crossing DR",
+    "city": "MIDDLEBURY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.66584299594,
+    "lng": -85.731497566566,
+    "maps_url": "https://maps.google.com/?q=999+Spring+Crossing+DR%2C+MIDDLEBURY"
+  },
+  {
+    "address": "11725 W 710 N",
+    "city": "MIDDLEBURY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.741628575766,
+    "lng": -85.654971223539,
+    "maps_url": "https://maps.google.com/?q=11725+W+710+N%2C+MIDDLEBURY"
+  },
+  {
+    "address": "11945 W 710 N",
+    "city": "MIDDLEBURY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.741629123668,
+    "lng": -85.658563593352,
+    "maps_url": "https://maps.google.com/?q=11945+W+710+N%2C+MIDDLEBURY"
+  },
+  {
+    "address": "11800 W 750 N",
+    "city": "MIDDLEBURY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.749233766119,
+    "lng": -85.655807697372,
+    "maps_url": "https://maps.google.com/?q=11800+W+750+N%2C+MIDDLEBURY"
+  },
+  {
+    "address": "51653 E COUNTY LINE RD",
+    "city": "MIDDLEBURY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.745637830016,
+    "lng": -85.659936233156,
+    "maps_url": "https://maps.google.com/?q=51653+E+COUNTY+LINE+RD%2C+MIDDLEBURY"
+  },
+  {
+    "address": "807 HIDDEN CT",
+    "city": "MIDDLEBURY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.662231529452,
+    "lng": -85.734426426914,
+    "maps_url": "https://maps.google.com/?q=807+HIDDEN+CT%2C+MIDDLEBURY"
+  },
+  {
+    "address": "118 KRIDER DR",
+    "city": "MIDDLEBURY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.678129553576,
+    "lng": -85.7117339332,
+    "maps_url": "https://maps.google.com/?q=118+KRIDER+DR%2C+MIDDLEBURY"
+  },
+  {
+    "address": "56175 BRIDLE PATH DR",
+    "city": "MIDDLEBURY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.67951554175,
+    "lng": -85.745659603596,
+    "maps_url": "https://maps.google.com/?q=56175+BRIDLE+PATH+DR%2C+MIDDLEBURY"
+  },
+  {
+    "address": "200 Maple ST / APT. i45",
+    "city": "MILLERSBURG",
+    "county": "Elkhart County",
+    "township": "Cleveland Township",
+    "state": "",
+    "lat": 41.528071079766,
+    "lng": -85.697351688472,
+    "maps_url": "https://maps.google.com/?q=200+Maple+ST+%2F+APT.+i45%2C+MILLERSBURG"
+  },
+  {
+    "address": "324 W ELM ST",
+    "city": "MILLERSBURG",
+    "county": "Elkhart County",
+    "township": "Cleveland Township",
+    "state": "",
+    "lat": 41.52701480767,
+    "lng": -85.701968275106,
+    "maps_url": "https://maps.google.com/?q=324+W+ELM+ST%2C+MILLERSBURG"
+  },
+  {
+    "address": "11614 COUNTY ROAD 44",
+    "city": "MILLERSBURG",
+    "county": "Elkhart County",
+    "township": "Cleveland Township",
+    "state": "",
+    "lat": 41.510995014044,
+    "lng": -85.686182118767,
+    "maps_url": "https://maps.google.com/?q=11614+COUNTY+ROAD+44%2C+MILLERSBURG"
+  },
+  {
+    "address": "408 S SCHROEDER RD",
+    "city": "MUNCIE",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.191000335504,
+    "lng": -85.426569895094,
+    "maps_url": "https://maps.google.com/?q=408+S+SCHROEDER+RD%2C+MUNCIE"
+  },
+  {
+    "address": "2816 W OAKLYN AVE",
+    "city": "MUNCIE",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.190548625114,
+    "lng": -85.419388765286,
+    "maps_url": "https://maps.google.com/?q=2816+W+OAKLYN+AVE%2C+MUNCIE"
+  },
+  {
+    "address": "601 S STRADLING RD",
+    "city": "MUNCIE",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.189890060963,
+    "lng": -85.434010058681,
+    "maps_url": "https://maps.google.com/?q=601+S+STRADLING+RD%2C+MUNCIE"
+  },
+  {
+    "address": "107 N ALDEN RD",
+    "city": "MUNCIE",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.193931562918,
+    "lng": -85.420429861657,
+    "maps_url": "https://maps.google.com/?q=107+N+ALDEN+RD%2C+MUNCIE"
+  },
+  {
+    "address": "4213 W GARVER DR CAUTION ⚠️",
+    "city": "MUNCIE",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.193658616101,
+    "lng": -85.435113814297,
+    "maps_url": "https://maps.google.com/?q=4213+W+GARVER+DR+CAUTION+%E2%9A%A0%EF%B8%8F%2C+MUNCIE"
+  },
+  {
+    "address": "3301 W OAKLYN AVE",
+    "city": "MUNCIE",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.190268892892,
+    "lng": -85.42486166245,
+    "maps_url": "https://maps.google.com/?q=3301+W+OAKLYN+AVE%2C+MUNCIE"
+  },
+  {
+    "address": "4504 W BURTON DR",
+    "city": "MUNCIE",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.196047625052,
+    "lng": -85.43841369255,
+    "maps_url": "https://maps.google.com/?q=4504+W+BURTON+DR%2C+MUNCIE"
+  },
+  {
+    "address": "4518 W GARVER DR",
+    "city": "MUNCIE",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 40.193781593733,
+    "lng": -85.438269980456,
+    "maps_url": "https://maps.google.com/?q=4518+W+GARVER+DR%2C+MUNCIE"
+  },
+  {
+    "address": "1661 S 14th ST",
+    "city": "NILES",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.803701410448,
+    "lng": -86.242984615285,
+    "maps_url": "https://maps.google.com/?q=1661+S+14th+ST%2C+NILES"
+  },
+  {
+    "address": "1067 Bame Ave",
+    "city": "NILES",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.830852370702,
+    "lng": -86.199018277259,
+    "maps_url": "https://maps.google.com/?q=1067+Bame+Ave%2C+NILES"
+  },
+  {
+    "address": "1500 FERNDALE BLVD",
+    "city": "NILES",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.808376448302,
+    "lng": -86.245632871845,
+    "maps_url": "https://maps.google.com/?q=1500+FERNDALE+BLVD%2C+NILES"
+  },
+  {
+    "address": "1417 OAKDALE AVE",
+    "city": "NILES",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.801977868271,
+    "lng": -86.242502322597,
+    "maps_url": "https://maps.google.com/?q=1417+OAKDALE+AVE%2C+NILES"
+  },
+  {
+    "address": "2531 LAKE SHORE DR",
+    "city": "NILES",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.835757940709,
+    "lng": -86.19230622632,
+    "maps_url": "https://maps.google.com/?q=2531+LAKE+SHORE+DR%2C+NILES"
+  },
+  {
+    "address": "709 S LINDA LN",
+    "city": "NORTH WEBSTER",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.320060322683,
+    "lng": -85.698635960058,
+    "maps_url": "https://maps.google.com/?q=709+S+LINDA+LN%2C+NORTH+WEBSTER"
+  },
+  {
+    "address": "9365 W VERMONT ST",
+    "city": "ORLAND",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.72972357378,
+    "lng": -85.171153006218,
+    "maps_url": "https://maps.google.com/?q=9365+W+VERMONT+ST%2C+ORLAND"
+  },
+  {
+    "address": "6355 N MAPLE CREST DR",
+    "city": "ORLAND",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.735062354026,
+    "lng": -85.173043004347,
+    "maps_url": "https://maps.google.com/?q=6355+N+MAPLE+CREST+DR%2C+ORLAND"
+  },
+  {
+    "address": "5835 N 327",
+    "city": "ORLAND",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.7267194,
+    "lng": -85.1614672,
+    "maps_url": "https://maps.google.com/?q=5835+N+327%2C+ORLAND"
+  },
+  {
+    "address": "6145 Indiana 327",
+    "city": "ORLAND",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.731658918684,
+    "lng": -85.171381554058,
+    "maps_url": "https://maps.google.com/?q=6145+Indiana+327%2C+ORLAND"
+  },
+  {
+    "address": "9625 W 650 N",
+    "city": "ORLAND",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.736554176149,
+    "lng": -85.174182766579,
+    "maps_url": "https://maps.google.com/?q=9625+W+650+N%2C+ORLAND"
+  },
+  {
+    "address": "11763 LINCOLNWAY",
+    "city": "OSCEOLA",
+    "county": "St. Joseph County",
+    "township": "Portage Township",
+    "state": "",
+    "lat": 41.663425395843,
+    "lng": -86.095390617737,
+    "maps_url": "https://maps.google.com/?q=11763+LINCOLNWAY%2C+OSCEOLA"
+  },
+  {
+    "address": "30495 County Road 24",
+    "city": "OSCEOLA",
+    "county": "St. Joseph County",
+    "township": "Portage Township",
+    "state": "",
+    "lat": 41.636154524443,
+    "lng": -86.047431776177,
+    "maps_url": "https://maps.google.com/?q=30495+County+Road+24%2C+OSCEOLA"
+  },
+  {
+    "address": "57788 APPLE RD ⚠️",
+    "city": "OSCEOLA",
+    "county": "St. Joseph County",
+    "township": "Portage Township",
+    "state": "",
+    "lat": 41.654776982287,
+    "lng": -86.070550524036,
+    "maps_url": "https://maps.google.com/?q=57788+APPLE+RD+%E2%9A%A0%EF%B8%8F%2C+OSCEOLA"
+  },
+  {
+    "address": "30495 County Road 24",
+    "city": "OSCEOLA",
+    "county": "St. Joseph County",
+    "township": "Portage Township",
+    "state": "",
+    "lat": 41.636154524443,
+    "lng": -86.047431776177,
+    "maps_url": "https://maps.google.com/?q=30495+County+Road+24%2C+OSCEOLA"
+  },
+  {
+    "address": "850 LINCOLNWAY W",
+    "city": "OSCEOLA",
+    "county": "St. Joseph County",
+    "township": "Portage Township",
+    "state": "",
+    "lat": 41.663320986468,
+    "lng": -86.079795704354,
+    "maps_url": "https://maps.google.com/?q=850+LINCOLNWAY+W%2C+OSCEOLA"
+  },
+  {
+    "address": "1452 3RD ST",
+    "city": "OSCEOLA",
+    "county": "St. Joseph County",
+    "township": "Portage Township",
+    "state": "",
+    "lat": 41.661109116004,
+    "lng": -86.080400073944,
+    "maps_url": "https://maps.google.com/?q=1452+3RD+ST%2C+OSCEOLA"
+  },
+  {
+    "address": "434 WATER ST",
+    "city": "OTSEGO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.462048948987,
+    "lng": -85.703261375392,
+    "maps_url": "https://maps.google.com/?q=434+WATER+ST%2C+OTSEGO"
+  },
+  {
+    "address": "200 SHERWOOD ST",
+    "city": "OTSEGO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.459873344256,
+    "lng": -85.708444516592,
+    "maps_url": "https://maps.google.com/?q=200+SHERWOOD+ST%2C+OTSEGO"
+  },
+  {
+    "address": "318 W MORRELL ST",
+    "city": "OTSEGO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.457878702889,
+    "lng": -85.70258598552,
+    "maps_url": "https://maps.google.com/?q=318+W+MORRELL+ST%2C+OTSEGO"
+  },
+  {
+    "address": "334 WATER ST",
+    "city": "OTSEGO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.462017392668,
+    "lng": -85.702274525029,
+    "maps_url": "https://maps.google.com/?q=334+WATER+ST%2C+OTSEGO"
+  },
+  {
+    "address": "357 W HAMMOND ST",
+    "city": "OTSEGO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.456668236881,
+    "lng": -85.703998196282,
+    "maps_url": "https://maps.google.com/?q=357+W+HAMMOND+ST%2C+OTSEGO"
+  },
+  {
+    "address": "522 MURIEL ST",
+    "city": "OTSEGO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.458454242611,
+    "lng": -85.708856391165,
+    "maps_url": "https://maps.google.com/?q=522+MURIEL+ST%2C+OTSEGO"
+  },
+  {
+    "address": "522 MURIEL ST",
+    "city": "OTSEGO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.458454242611,
+    "lng": -85.708856391165,
+    "maps_url": "https://maps.google.com/?q=522+MURIEL+ST%2C+OTSEGO"
+  },
+  {
+    "address": "216 E Allegan ST",
+    "city": "OTSEGO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.460083352685,
+    "lng": -85.69491610819,
+    "maps_url": "https://maps.google.com/?q=216+E+Allegan+ST%2C+OTSEGO"
+  },
+  {
+    "address": "226 E ALLEGAN ST",
+    "city": "OTSEGO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.460031324435,
+    "lng": -85.694657267751,
+    "maps_url": "https://maps.google.com/?q=226+E+ALLEGAN+ST%2C+OTSEGO"
+  },
+  {
+    "address": "211 S FAIR ST",
+    "city": "OTSEGO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.459012390644,
+    "lng": -85.695743178346,
+    "maps_url": "https://maps.google.com/?q=211+S+FAIR+ST%2C+OTSEGO"
+  },
+  {
+    "address": "319 W HAMMOND ST",
+    "city": "OTSEGO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.456651495437,
+    "lng": -85.702573506125,
+    "maps_url": "https://maps.google.com/?q=319+W+HAMMOND+ST%2C+OTSEGO"
+  },
+  {
+    "address": "317 S FAIR ST",
+    "city": "OTSEGO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.457848018443,
+    "lng": -85.696160427865,
+    "maps_url": "https://maps.google.com/?q=317+S+FAIR+ST%2C+OTSEGO"
+  },
+  {
+    "address": "362 GARFIELD ST",
+    "city": "OTSEGO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.455379163484,
+    "lng": -85.704275405516,
+    "maps_url": "https://maps.google.com/?q=362+GARFIELD+ST%2C+OTSEGO"
+  },
+  {
+    "address": "378 W ORLEANS ST",
+    "city": "OTSEGO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.460218446478,
+    "lng": -85.704441508832,
+    "maps_url": "https://maps.google.com/?q=378+W+ORLEANS+ST%2C+OTSEGO"
+  },
+  {
+    "address": "303 W ORLEANS ST",
+    "city": "OTSEGO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.460115944677,
+    "lng": -85.701992820162,
+    "maps_url": "https://maps.google.com/?q=303+W+ORLEANS+ST%2C+OTSEGO"
+  },
+  {
+    "address": "307 W ORLEANS ST",
+    "city": "OTSEGO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.460115308517,
+    "lng": -85.702121643793,
+    "maps_url": "https://maps.google.com/?q=307+W+ORLEANS+ST%2C+OTSEGO"
+  },
+  {
+    "address": "344 W ORLEANS ST",
+    "city": "OTSEGO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.460223853832,
+    "lng": -85.703346507966,
+    "maps_url": "https://maps.google.com/?q=344+W+ORLEANS+ST%2C+OTSEGO"
+  },
+  {
+    "address": "720 NICHOLSON ST",
+    "city": "OTSEGO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.461727321141,
+    "lng": -85.712449766915,
+    "maps_url": "https://maps.google.com/?q=720+NICHOLSON+ST%2C+OTSEGO"
+  },
+  {
+    "address": "316 MCKINLEY ST",
+    "city": "OTSEGO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.454557044225,
+    "lng": -85.702746550664,
+    "maps_url": "https://maps.google.com/?q=316+MCKINLEY+ST%2C+OTSEGO"
+  },
+  {
+    "address": "214 W HAMMOND ST",
+    "city": "OTSEGO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.456597053312,
+    "lng": -85.700220668487,
+    "maps_url": "https://maps.google.com/?q=214+W+HAMMOND+ST%2C+OTSEGO"
+  },
+  {
+    "address": "7967 SUNNYDELL DR",
+    "city": "PARMA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.223716629273,
+    "lng": -84.559478217328,
+    "maps_url": "https://maps.google.com/?q=7967+SUNNYDELL+DR%2C+PARMA"
+  },
+  {
+    "address": "8265 LOCKERBIE RD",
+    "city": "PARMA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.22072593874,
+    "lng": -84.561859773318,
+    "maps_url": "https://maps.google.com/?q=8265+LOCKERBIE+RD%2C+PARMA"
+  },
+  {
+    "address": "7983 CABOT DR",
+    "city": "PARMA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.227015378388,
+    "lng": -84.559166941515,
+    "maps_url": "https://maps.google.com/?q=7983+CABOT+DR%2C+PARMA"
+  },
+  {
+    "address": "67 E MAIN ST",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.754706960224,
+    "lng": -86.066712726263,
+    "maps_url": "https://maps.google.com/?q=67+E+MAIN+ST%2C+PERU"
+  },
+  {
+    "address": "8 DELORES AVE",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.762778333299,
+    "lng": -86.07618529458,
+    "maps_url": "https://maps.google.com/?q=8+DELORES+AVE%2C+PERU"
+  },
+  {
+    "address": "245 W RIVERSIDE DR",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.746421713931,
+    "lng": -86.0733078457,
+    "maps_url": "https://maps.google.com/?q=245+W+RIVERSIDE+DR%2C+PERU"
+  },
+  {
+    "address": "24 ADAMS AVE",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.76494017788,
+    "lng": -86.075237373494,
+    "maps_url": "https://maps.google.com/?q=24+ADAMS+AVE%2C+PERU"
+  },
+  {
+    "address": "33 E Warren St",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.748507168848,
+    "lng": -86.063651347372,
+    "maps_url": "https://maps.google.com/?q=33+E+Warren+St%2C+PERU"
+  },
+  {
+    "address": "125 HAY AVE",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.766063035365,
+    "lng": -86.073998421174,
+    "maps_url": "https://maps.google.com/?q=125+HAY+AVE%2C+PERU"
+  },
+  {
+    "address": "373 E 5TH ST",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.759475899048,
+    "lng": -86.058514244926,
+    "maps_url": "https://maps.google.com/?q=373+E+5TH+ST%2C+PERU"
+  },
+  {
+    "address": "273 W 3RD ST",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.749119145092,
+    "lng": -86.076743495335,
+    "maps_url": "https://maps.google.com/?q=273+W+3RD+ST%2C+PERU"
+  },
+  {
+    "address": "373 E 5TH ST",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.759475899048,
+    "lng": -86.058514244926,
+    "maps_url": "https://maps.google.com/?q=373+E+5TH+ST%2C+PERU"
+  },
+  {
+    "address": "436 E 6TH ST",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.761243392203,
+    "lng": -86.057375912154,
+    "maps_url": "https://maps.google.com/?q=436+E+6TH+ST%2C+PERU"
+  },
+  {
+    "address": "20 BOULEVARD",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.759176672178,
+    "lng": -86.073536772453,
+    "maps_url": "https://maps.google.com/?q=20+BOULEVARD%2C+PERU"
+  },
+  {
+    "address": "330 BOULEVARD",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.754995039908,
+    "lng": -86.083535663603,
+    "maps_url": "https://maps.google.com/?q=330+BOULEVARD%2C+PERU"
+  },
+  {
+    "address": "44 MCKINSTRY AVE",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.748201074212,
+    "lng": -86.058062754923,
+    "maps_url": "https://maps.google.com/?q=44+MCKINSTRY+AVE%2C+PERU"
+  },
+  {
+    "address": "44 MCKINSTRY AVE",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.748201074212,
+    "lng": -86.058062754923,
+    "maps_url": "https://maps.google.com/?q=44+MCKINSTRY+AVE%2C+PERU"
+  },
+  {
+    "address": "555 OAK ST",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.752939941709,
+    "lng": -86.090649178755,
+    "maps_url": "https://maps.google.com/?q=555+OAK+ST%2C+PERU"
+  },
+  {
+    "address": "620 JEFFERSON AVE",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.765810260615,
+    "lng": -86.051597384498,
+    "maps_url": "https://maps.google.com/?q=620+JEFFERSON+AVE%2C+PERU"
+  },
+  {
+    "address": "632 OAK ST",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.752660558592,
+    "lng": -86.091947330424,
+    "maps_url": "https://maps.google.com/?q=632+OAK+ST%2C+PERU"
+  },
+  {
+    "address": "751 S BROADWAY",
+    "city": "PERU",
+    "county": "Miami County",
+    "township": "Peru Township",
+    "state": "",
+    "lat": 40.744148703688,
+    "lng": -86.054105502479,
+    "maps_url": "https://maps.google.com/?q=751+S+BROADWAY%2C+PERU"
+  },
+  {
+    "address": "303 N First ST",
+    "city": "PIERCETON",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.200810077666,
+    "lng": -85.705325034957,
+    "maps_url": "https://maps.google.com/?q=303+N+First+ST%2C+PIERCETON"
+  },
+  {
+    "address": "1004 S APPLE CT",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.454769509564,
+    "lng": -85.63985090496,
+    "maps_url": "https://maps.google.com/?q=1004+S+APPLE+CT%2C+PLAINWELL"
+  },
+  {
+    "address": "419 WALNUT WOODS CT",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.439758605893,
+    "lng": -85.652702967797,
+    "maps_url": "https://maps.google.com/?q=419+WALNUT+WOODS+CT%2C+PLAINWELL"
+  },
+  {
+    "address": "188 11TH ST",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.434516913474,
+    "lng": -85.647674170834,
+    "maps_url": "https://maps.google.com/?q=188+11TH+ST%2C+PLAINWELL"
+  },
+  {
+    "address": "329 ALLEGAN ST",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.445182938441,
+    "lng": -85.647205806448,
+    "maps_url": "https://maps.google.com/?q=329+ALLEGAN+ST%2C+PLAINWELL"
+  },
+  {
+    "address": "516 N MAIN ST",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.448137578507,
+    "lng": -85.641811098148,
+    "maps_url": "https://maps.google.com/?q=516+N+MAIN+ST%2C+PLAINWELL"
+  },
+  {
+    "address": "1034 N STONERIDGE DR ⚠️",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.456896850952,
+    "lng": -85.645723909688,
+    "maps_url": "https://maps.google.com/?q=1034+N+STONERIDGE+DR+%E2%9A%A0%EF%B8%8F%2C+PLAINWELL"
+  },
+  {
+    "address": "1148 N APPLE CT",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.457047484839,
+    "lng": -85.639828665736,
+    "maps_url": "https://maps.google.com/?q=1148+N+APPLE+CT%2C+PLAINWELL"
+  },
+  {
+    "address": "1024 S STONERIDGE DR",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.455382642739,
+    "lng": -85.645042553703,
+    "maps_url": "https://maps.google.com/?q=1024+S+STONERIDGE+DR%2C+PLAINWELL"
+  },
+  {
+    "address": "1050 WEDGEWOOD DR",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.454260912058,
+    "lng": -85.644813966324,
+    "maps_url": "https://maps.google.com/?q=1050+WEDGEWOOD+DR%2C+PLAINWELL"
+  },
+  {
+    "address": "1306 ALIVIA DR",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.440067111882,
+    "lng": -85.671907068852,
+    "maps_url": "https://maps.google.com/?q=1306+ALIVIA+DR%2C+PLAINWELL"
+  },
+  {
+    "address": "1290 TIMBER OAKS CT",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.443877009121,
+    "lng": -85.669843543695,
+    "maps_url": "https://maps.google.com/?q=1290+TIMBER+OAKS+CT%2C+PLAINWELL"
+  },
+  {
+    "address": "1290 TIMBER OAKS CT",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.443877009121,
+    "lng": -85.669843543695,
+    "maps_url": "https://maps.google.com/?q=1290+TIMBER+OAKS+CT%2C+PLAINWELL"
+  },
+  {
+    "address": "273 ZAK RD",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.441081638347,
+    "lng": -85.671394689998,
+    "maps_url": "https://maps.google.com/?q=273+ZAK+RD%2C+PLAINWELL"
+  },
+  {
+    "address": "412 W CHART ST",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.441894176794,
+    "lng": -85.647046321695,
+    "maps_url": "https://maps.google.com/?q=412+W+CHART+ST%2C+PLAINWELL"
+  },
+  {
+    "address": "412 W CHART ST",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.441894176794,
+    "lng": -85.647046321695,
+    "maps_url": "https://maps.google.com/?q=412+W+CHART+ST%2C+PLAINWELL"
+  },
+  {
+    "address": "534 FOXMOOR DR",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.459044518838,
+    "lng": -85.646210748346,
+    "maps_url": "https://maps.google.com/?q=534+FOXMOOR+DR%2C+PLAINWELL"
+  },
+  {
+    "address": "773 GLENVIEW DR",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.451623027909,
+    "lng": -85.638402874649,
+    "maps_url": "https://maps.google.com/?q=773+GLENVIEW+DR%2C+PLAINWELL"
+  },
+  {
+    "address": "109 WALNUT WOODS CT",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.442555953345,
+    "lng": -85.652924135234,
+    "maps_url": "https://maps.google.com/?q=109+WALNUT+WOODS+CT%2C+PLAINWELL"
+  },
+  {
+    "address": "1080 S PEACH CT",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.455784247691,
+    "lng": -85.638442784123,
+    "maps_url": "https://maps.google.com/?q=1080+S+PEACH+CT%2C+PLAINWELL"
+  },
+  {
+    "address": "311 E GRANT ST",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.441020156235,
+    "lng": -85.638913305544,
+    "maps_url": "https://maps.google.com/?q=311+E+GRANT+ST%2C+PLAINWELL"
+  },
+  {
+    "address": "1039 S PEACH CT",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.455084429227,
+    "lng": -85.638602313961,
+    "maps_url": "https://maps.google.com/?q=1039+S+PEACH+CT%2C+PLAINWELL"
+  },
+  {
+    "address": "203 WASHINGTON AVE",
+    "city": "PLAINWELL",
+    "county": "Allegan County",
+    "township": "Plainwell Township",
+    "state": "",
+    "lat": 42.449989234816,
+    "lng": -85.640428305352,
+    "maps_url": "https://maps.google.com/?q=203+WASHINGTON+AVE%2C+PLAINWELL"
+  },
+  {
+    "address": "1362 DESMOND ST",
+    "city": "SAINT JOSEPH",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.03839708089,
+    "lng": -86.486499854305,
+    "maps_url": "https://maps.google.com/?q=1362+DESMOND+ST%2C+SAINT+JOSEPH"
+  },
+  {
+    "address": "1316 SILVER CREEK PL",
+    "city": "SAINT JOSEPH",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.027098071708,
+    "lng": -86.485480412695,
+    "maps_url": "https://maps.google.com/?q=1316+SILVER+CREEK+PL%2C+SAINT+JOSEPH"
+  },
+  {
+    "address": "1393 BRENTWOOD DR",
+    "city": "SAINT JOSEPH",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.018641809719,
+    "lng": -86.487260542619,
+    "maps_url": "https://maps.google.com/?q=1393+BRENTWOOD+DR%2C+SAINT+JOSEPH"
+  },
+  {
+    "address": "1375 WOODCREEK TRL",
+    "city": "SAINT JOSEPH",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.02772022611,
+    "lng": -86.487189329938,
+    "maps_url": "https://maps.google.com/?q=1375+WOODCREEK+TRL%2C+SAINT+JOSEPH"
+  },
+  {
+    "address": "1348 BUCKHORN DR",
+    "city": "SAINT JOSEPH",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.020313763328,
+    "lng": -86.485943134483,
+    "maps_url": "https://maps.google.com/?q=1348+BUCKHORN+DR%2C+SAINT+JOSEPH"
+  },
+  {
+    "address": "1355 MULBERRY LN",
+    "city": "SAINT JOSEPH",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.032163830204,
+    "lng": -86.486567995976,
+    "maps_url": "https://maps.google.com/?q=1355+MULBERRY+LN%2C+SAINT+JOSEPH"
+  },
+  {
+    "address": "1281 W MARQUETTE WOODS RD",
+    "city": "SAINT JOSEPH",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.02900535316,
+    "lng": -86.484772890948,
+    "maps_url": "https://maps.google.com/?q=1281+W+MARQUETTE+WOODS+RD%2C+SAINT+JOSEPH"
+  },
+  {
+    "address": "5996 David Hwy",
+    "city": "SARANAC",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.929794239019,
+    "lng": -85.193496593961,
+    "maps_url": "https://maps.google.com/?q=5996+David+Hwy%2C+SARANAC"
+  },
+  {
+    "address": "4104 RUNNERS CT",
+    "city": "SARANAC",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.928837158734,
+    "lng": -85.187755892178,
+    "maps_url": "https://maps.google.com/?q=4104+RUNNERS+CT%2C+SARANAC"
+  },
+  {
+    "address": "6220 RIVERSIDE DR",
+    "city": "SARANAC",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.933520473911,
+    "lng": -85.197860573835,
+    "maps_url": "https://maps.google.com/?q=6220+RIVERSIDE+DR%2C+SARANAC"
+  },
+  {
+    "address": "6019 DAVID HWY",
+    "city": "SARANAC",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.929843400087,
+    "lng": -85.194247042234,
+    "maps_url": "https://maps.google.com/?q=6019+DAVID+HWY%2C+SARANAC"
+  },
+  {
+    "address": "6131 DAVID HWY",
+    "city": "SARANAC",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.929815357852,
+    "lng": -85.196157426293,
+    "maps_url": "https://maps.google.com/?q=6131+DAVID+HWY%2C+SARANAC"
+  },
+  {
+    "address": "30 CENTER ST",
+    "city": "SARANAC",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.930445809049,
+    "lng": -85.210477554997,
+    "maps_url": "https://maps.google.com/?q=30+CENTER+ST%2C+SARANAC"
+  },
+  {
+    "address": "35 WASHINGTON ST",
+    "city": "SARANAC",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.926551337822,
+    "lng": -85.214067039663,
+    "maps_url": "https://maps.google.com/?q=35+WASHINGTON+ST%2C+SARANAC"
+  },
+  {
+    "address": "123 S VOSPER ST",
+    "city": "SARANAC",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.927711677243,
+    "lng": -85.208401307443,
+    "maps_url": "https://maps.google.com/?q=123+S+VOSPER+ST%2C+SARANAC"
+  },
+  {
+    "address": "125 CENTER ST",
+    "city": "SARANAC",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.928080798983,
+    "lng": -85.210837008606,
+    "maps_url": "https://maps.google.com/?q=125+CENTER+ST%2C+SARANAC"
+  },
+  {
+    "address": "7330 N 1150 W",
+    "city": "SHIPSHEWANA",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.745194747167,
+    "lng": -85.650321702318,
+    "maps_url": "https://maps.google.com/?q=7330+N+1150+W%2C+SHIPSHEWANA"
+  },
+  {
+    "address": "21793 ROOSEVELT RD",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.594080418246,
+    "lng": -86.288001306109,
+    "maps_url": "https://maps.google.com/?q=21793+ROOSEVELT+RD%2C+SOUTH+BEND"
+  },
+  {
+    "address": "1365 E RIDING MALL",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.609302673828,
+    "lng": -86.229052173486,
+    "maps_url": "https://maps.google.com/?q=1365+E+RIDING+MALL%2C+SOUTH+BEND"
+  },
+  {
+    "address": "19957 SOUTHLAND AVE",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.607160087105,
+    "lng": -86.253147972464,
+    "maps_url": "https://maps.google.com/?q=19957+SOUTHLAND+AVE%2C+SOUTH+BEND"
+  },
+  {
+    "address": "21979 ROOSEVELT RD",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.594107418432,
+    "lng": -86.291582986328,
+    "maps_url": "https://maps.google.com/?q=21979+ROOSEVELT+RD%2C+SOUTH+BEND"
+  },
+  {
+    "address": "61540 ELDERBERRY LN",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.599226493157,
+    "lng": -86.237077732763,
+    "maps_url": "https://maps.google.com/?q=61540+ELDERBERRY+LN%2C+SOUTH+BEND"
+  },
+  {
+    "address": "1018 South Bend AVE",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.686689075764,
+    "lng": -86.236368763739,
+    "maps_url": "https://maps.google.com/?q=1018+South+Bend+AVE%2C+SOUTH+BEND"
+  },
+  {
+    "address": "1018 South Bend AVE",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.686689075764,
+    "lng": -86.236368763739,
+    "maps_url": "https://maps.google.com/?q=1018+South+Bend+AVE%2C+SOUTH+BEND"
+  },
+  {
+    "address": "1018 South Bend AVE",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.686689075764,
+    "lng": -86.236368763739,
+    "maps_url": "https://maps.google.com/?q=1018+South+Bend+AVE%2C+SOUTH+BEND"
+  },
+  {
+    "address": "1018 South Bend AVE",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.686689075764,
+    "lng": -86.236368763739,
+    "maps_url": "https://maps.google.com/?q=1018+South+Bend+AVE%2C+SOUTH+BEND"
+  },
+  {
+    "address": "1018 South Bend AVE",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.686689075764,
+    "lng": -86.236368763739,
+    "maps_url": "https://maps.google.com/?q=1018+South+Bend+AVE%2C+SOUTH+BEND"
+  },
+  {
+    "address": "1018 South Bend AVE",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.686689075764,
+    "lng": -86.236368763739,
+    "maps_url": "https://maps.google.com/?q=1018+South+Bend+AVE%2C+SOUTH+BEND"
+  },
+  {
+    "address": "60735 WHISPERING HILLS DR",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.612129512775,
+    "lng": -86.27105957047,
+    "maps_url": "https://maps.google.com/?q=60735+WHISPERING+HILLS+DR%2C+SOUTH+BEND"
+  },
+  {
+    "address": "19691 GREENACRE ST",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.753713388335,
+    "lng": -86.250601637668,
+    "maps_url": "https://maps.google.com/?q=19691+GREENACRE+ST%2C+SOUTH+BEND"
+  },
+  {
+    "address": "1424 FOREST TRL",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.602946244687,
+    "lng": -86.22764973769,
+    "maps_url": "https://maps.google.com/?q=1424+FOREST+TRL%2C+SOUTH+BEND"
+  },
+  {
+    "address": "53401 AUTUMN SKY CT",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.7177647123,
+    "lng": -86.227537358349,
+    "maps_url": "https://maps.google.com/?q=53401+AUTUMN+SKY+CT%2C+SOUTH+BEND"
+  },
+  {
+    "address": "52569 MYRTLE AVE",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.729207894014,
+    "lng": -86.248249668699,
+    "maps_url": "https://maps.google.com/?q=52569+MYRTLE+AVE%2C+SOUTH+BEND"
+  },
+  {
+    "address": "51571 AUDUBON WOODS DR",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.743839700338,
+    "lng": -86.245456432335,
+    "maps_url": "https://maps.google.com/?q=51571+AUDUBON+WOODS+DR%2C+SOUTH+BEND"
+  },
+  {
+    "address": "1815 ELIZABETHAN CT",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.617733530714,
+    "lng": -86.221687130049,
+    "maps_url": "https://maps.google.com/?q=1815+ELIZABETHAN+CT%2C+SOUTH+BEND"
+  },
+  {
+    "address": "23465 LAWRENCE ST",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.688318000935,
+    "lng": -86.321443930516,
+    "maps_url": "https://maps.google.com/?q=23465+LAWRENCE+ST%2C+SOUTH+BEND"
+  },
+  {
+    "address": "22520 KERN RD ⚠️",
+    "city": "SOUTH BEND",
+    "county": "St. Joseph County",
+    "township": "South Bend Township",
+    "state": "",
+    "lat": 41.608272689238,
+    "lng": -86.302895551869,
+    "maps_url": "https://maps.google.com/?q=22520+KERN+RD+%E2%9A%A0%EF%B8%8F%2C+SOUTH+BEND"
+  },
+  {
+    "address": "600 Main Street",
+    "city": "SOUTH WHITLEY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.080641059473,
+    "lng": -85.629127343063,
+    "maps_url": "https://maps.google.com/?q=600+Main+Street%2C+SOUTH+WHITLEY"
+  },
+  {
+    "address": "111 W ELM ST",
+    "city": "SOUTH WHITLEY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.080737782048,
+    "lng": -85.626438568806,
+    "maps_url": "https://maps.google.com/?q=111+W+ELM+ST%2C+SOUTH+WHITLEY"
+  },
+  {
+    "address": "515 N State ST",
+    "city": "SOUTH WHITLEY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.089988605099,
+    "lng": -85.627970176419,
+    "maps_url": "https://maps.google.com/?q=515+N+State+ST%2C+SOUTH+WHITLEY"
+  },
+  {
+    "address": "5995 S 900 W",
+    "city": "SOUTH WHITLEY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.031735890714,
+    "lng": -85.605346738047,
+    "maps_url": "https://maps.google.com/?q=5995+S+900+W%2C+SOUTH+WHITLEY"
+  },
+  {
+    "address": "6375 W WHITLEY RD",
+    "city": "SOUTH WHITLEY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.107343672468,
+    "lng": -85.613727569423,
+    "maps_url": "https://maps.google.com/?q=6375+W+WHITLEY+RD%2C+SOUTH+WHITLEY"
+  },
+  {
+    "address": "409 N CALHOUN ST",
+    "city": "SOUTH WHITLEY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.089006012316,
+    "lng": -85.625443657636,
+    "maps_url": "https://maps.google.com/?q=409+N+CALHOUN+ST%2C+SOUTH+WHITLEY"
+  },
+  {
+    "address": "3449 S 500 W",
+    "city": "SOUTH WHITLEY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.11211010369,
+    "lng": -85.586383852364,
+    "maps_url": "https://maps.google.com/?q=3449+S+500+W%2C+SOUTH+WHITLEY"
+  },
+  {
+    "address": "3482 S 500 W",
+    "city": "SOUTH WHITLEY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.111381936342,
+    "lng": -85.586545881247,
+    "maps_url": "https://maps.google.com/?q=3482+S+500+W%2C+SOUTH+WHITLEY"
+  },
+  {
+    "address": "205 N Line ST",
+    "city": "SOUTH WHITLEY",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.086511809081,
+    "lng": -85.63114016405,
+    "maps_url": "https://maps.google.com/?q=205+N+Line+ST%2C+SOUTH+WHITLEY"
+  },
+  {
+    "address": "127 BLENHEIM DR",
+    "city": "SPRING ARBOR",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.201233171148,
+    "lng": -84.54367543486,
+    "maps_url": "https://maps.google.com/?q=127+BLENHEIM+DR%2C+SPRING+ARBOR"
+  },
+  {
+    "address": "123 MELODY LN",
+    "city": "SPRING ARBOR",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.206011717489,
+    "lng": -84.54713867027,
+    "maps_url": "https://maps.google.com/?q=123+MELODY+LN%2C+SPRING+ARBOR"
+  },
+  {
+    "address": "41 DICKENS ST",
+    "city": "SPRING ARBOR",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.209133628388,
+    "lng": -84.566313575182,
+    "maps_url": "https://maps.google.com/?q=41+DICKENS+ST%2C+SPRING+ARBOR"
+  },
+  {
+    "address": "121 MARIETTA RD",
+    "city": "SPRING ARBOR",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.202671628799,
+    "lng": -84.552448984962,
+    "maps_url": "https://maps.google.com/?q=121+MARIETTA+RD%2C+SPRING+ARBOR"
+  },
+  {
+    "address": "6408 KING RD",
+    "city": "SPRING ARBOR",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.218464215861,
+    "lng": -84.52227928168,
+    "maps_url": "https://maps.google.com/?q=6408+KING+RD%2C+SPRING+ARBOR"
+  },
+  {
+    "address": "6233 KING RD",
+    "city": "SPRING ARBOR",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.218351164217,
+    "lng": -84.519847492453,
+    "maps_url": "https://maps.google.com/?q=6233+KING+RD%2C+SPRING+ARBOR"
+  },
+  {
+    "address": "139 HARMONY RD",
+    "city": "SPRING ARBOR",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.203714356388,
+    "lng": -84.548625965427,
+    "maps_url": "https://maps.google.com/?q=139+HARMONY+RD%2C+SPRING+ARBOR"
+  },
+  {
+    "address": "376 RICHARD ST",
+    "city": "SPRING ARBOR",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.210692883447,
+    "lng": -84.548802597982,
+    "maps_url": "https://maps.google.com/?q=376+RICHARD+ST%2C+SPRING+ARBOR"
+  },
+  {
+    "address": "155 HARMONY RD",
+    "city": "SPRING ARBOR",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.203729429743,
+    "lng": -84.547764628402,
+    "maps_url": "https://maps.google.com/?q=155+HARMONY+RD%2C+SPRING+ARBOR"
+  },
+  {
+    "address": "164 HARMONY RD",
+    "city": "SPRING ARBOR",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.203624291119,
+    "lng": -84.547222639252,
+    "maps_url": "https://maps.google.com/?q=164+HARMONY+RD%2C+SPRING+ARBOR"
+  },
+  {
+    "address": "119 MELODY LN",
+    "city": "SPRING ARBOR",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.206131204656,
+    "lng": -84.547142205382,
+    "maps_url": "https://maps.google.com/?q=119+MELODY+LN%2C+SPRING+ARBOR"
+  },
+  {
+    "address": "17 DICKENS ST",
+    "city": "SPRING ARBOR",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.209060958777,
+    "lng": -84.562758196519,
+    "maps_url": "https://maps.google.com/?q=17+DICKENS+ST%2C+SPRING+ARBOR"
+  },
+  {
+    "address": "53 DICKENS ST",
+    "city": "SPRING ARBOR",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.208240305402,
+    "lng": -84.566900866679,
+    "maps_url": "https://maps.google.com/?q=53+DICKENS+ST%2C+SPRING+ARBOR"
+  },
+  {
+    "address": "5517 SIOUX CT",
+    "city": "STEVENSVILLE",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.017959021442,
+    "lng": -86.506172285873,
+    "maps_url": "https://maps.google.com/?q=5517+SIOUX+CT%2C+STEVENSVILLE"
+  },
+  {
+    "address": "1615 HICKORY TRACE DR",
+    "city": "STEVENSVILLE",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.016891355677,
+    "lng": -86.492573573807,
+    "maps_url": "https://maps.google.com/?q=1615+HICKORY+TRACE+DR%2C+STEVENSVILLE"
+  },
+  {
+    "address": "5502 IVY DR",
+    "city": "STEVENSVILLE",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.017622140465,
+    "lng": -86.491929717153,
+    "maps_url": "https://maps.google.com/?q=5502+IVY+DR%2C+STEVENSVILLE"
+  },
+  {
+    "address": "5543 IVY PATH",
+    "city": "STEVENSVILLE",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.017220946273,
+    "lng": -86.491018738918,
+    "maps_url": "https://maps.google.com/?q=5543+IVY+PATH%2C+STEVENSVILLE"
+  },
+  {
+    "address": "70881 COUNTY ROAD 33",
+    "city": "SYRACUSE",
+    "county": "Kosciusko County",
+    "township": "Turkey Creek Township",
+    "state": "",
+    "lat": 41.466949993564,
+    "lng": -85.751040100551,
+    "maps_url": "https://maps.google.com/?q=70881+COUNTY+ROAD+33%2C+SYRACUSE"
+  },
+  {
+    "address": "72522 COUNTY ROAD 133",
+    "city": "SYRACUSE",
+    "county": "Kosciusko County",
+    "township": "Turkey Creek Township",
+    "state": "",
+    "lat": 41.442756898309,
+    "lng": -85.740416350365,
+    "maps_url": "https://maps.google.com/?q=72522+COUNTY+ROAD+133%2C+SYRACUSE"
+  },
+  {
+    "address": "70704 COUNTY ROAD 33",
+    "city": "SYRACUSE",
+    "county": "Kosciusko County",
+    "township": "Turkey Creek Township",
+    "state": "",
+    "lat": 41.469657510828,
+    "lng": -85.750963789659,
+    "maps_url": "https://maps.google.com/?q=70704+COUNTY+ROAD+33%2C+SYRACUSE"
+  },
+  {
+    "address": "215 LOCUST ST W",
+    "city": "THREE OAKS",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.797552315955,
+    "lng": -86.614323194305,
+    "maps_url": "https://maps.google.com/?q=215+LOCUST+ST+W%2C+THREE+OAKS"
+  },
+  {
+    "address": "111 MAPLE ST",
+    "city": "THREE OAKS",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.80207815221,
+    "lng": -86.608453100858,
+    "maps_url": "https://maps.google.com/?q=111+MAPLE+ST%2C+THREE+OAKS"
+  },
+  {
+    "address": "111 MAPLE ST",
+    "city": "THREE OAKS",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.80207815221,
+    "lng": -86.608453100858,
+    "maps_url": "https://maps.google.com/?q=111+MAPLE+ST%2C+THREE+OAKS"
+  },
+  {
+    "address": "21 N ELM ST",
+    "city": "THREE OAKS",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.801299140913,
+    "lng": -86.610483683847,
+    "maps_url": "https://maps.google.com/?q=21+N+ELM+ST%2C+THREE+OAKS"
+  },
+  {
+    "address": "201 BEECH ST E",
+    "city": "THREE OAKS",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.803887575349,
+    "lng": -86.606898608685,
+    "maps_url": "https://maps.google.com/?q=201+BEECH+ST+E%2C+THREE+OAKS"
+  },
+  {
+    "address": "105 BUCKEYE ST",
+    "city": "THREE OAKS",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.807000896629,
+    "lng": -86.608474720785,
+    "maps_url": "https://maps.google.com/?q=105+BUCKEYE+ST%2C+THREE+OAKS"
+  },
+  {
+    "address": "105 BUCKEYE ST",
+    "city": "THREE OAKS",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.807000896629,
+    "lng": -86.608474720785,
+    "maps_url": "https://maps.google.com/?q=105+BUCKEYE+ST%2C+THREE+OAKS"
+  },
+  {
+    "address": "211 2ND AVE",
+    "city": "THREE RIVERS",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.943438324567,
+    "lng": -85.627080007509,
+    "maps_url": "https://maps.google.com/?q=211+2ND+AVE%2C+THREE+RIVERS"
+  },
+  {
+    "address": "314 WEST ST",
+    "city": "THREE RIVERS",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.94883449347,
+    "lng": -85.6362082375,
+    "maps_url": "https://maps.google.com/?q=314+WEST+ST%2C+THREE+RIVERS"
+  },
+  {
+    "address": "805 S HOOKER AVE",
+    "city": "THREE RIVERS",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.933878932892,
+    "lng": -85.638908489692,
+    "maps_url": "https://maps.google.com/?q=805+S+HOOKER+AVE%2C+THREE+RIVERS"
+  },
+  {
+    "address": "725 HAMILTON ST",
+    "city": "VICKSBURG",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.112155656575,
+    "lng": -85.526046551391,
+    "maps_url": "https://maps.google.com/?q=725+HAMILTON+ST%2C+VICKSBURG"
+  },
+  {
+    "address": "459 Maple LN",
+    "city": "WAKARUSA",
+    "county": "Elkhart County",
+    "township": "Olive Township",
+    "state": "",
+    "lat": 41.5309639,
+    "lng": -86.0111288,
+    "maps_url": "https://maps.google.com/?q=459+Maple+LN%2C+WAKARUSA"
+  },
+  {
+    "address": "415 N Elkhart ST / Lot.67",
+    "city": "WAKARUSA",
+    "county": "Elkhart County",
+    "township": "Olive Township",
+    "state": "",
+    "lat": 41.541598649203,
+    "lng": -86.02498752269,
+    "maps_url": "https://maps.google.com/?q=415+N+Elkhart+ST+%2F+Lot.67%2C+WAKARUSA"
+  },
+  {
+    "address": "1406 ALPHA ST",
+    "city": "WARSAW",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.222001997814,
+    "lng": -85.85658849273,
+    "maps_url": "https://maps.google.com/?q=1406+ALPHA+ST%2C+WARSAW"
+  },
+  {
+    "address": "1006 COUNTRY CLUB DR",
+    "city": "WARSAW",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.224431816323,
+    "lng": -85.840238532815,
+    "maps_url": "https://maps.google.com/?q=1006+COUNTRY+CLUB+DR%2C+WARSAW"
+  },
+  {
+    "address": "1905 BAYVIEW LN",
+    "city": "WARSAW",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.233356803049,
+    "lng": -85.831028387004,
+    "maps_url": "https://maps.google.com/?q=1905+BAYVIEW+LN%2C+WARSAW"
+  },
+  {
+    "address": "2015 OAKWOOD DR",
+    "city": "WARSAW",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.245104737569,
+    "lng": -85.888776624529,
+    "maps_url": "https://maps.google.com/?q=2015+OAKWOOD+DR%2C+WARSAW"
+  },
+  {
+    "address": "2156 LINDENWOOD AVE",
+    "city": "WARSAW",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.210216934881,
+    "lng": -85.862200291531,
+    "maps_url": "https://maps.google.com/?q=2156+LINDENWOOD+AVE%2C+WARSAW"
+  },
+  {
+    "address": "601 N WEST ST",
+    "city": "WARSAW",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.243007615239,
+    "lng": -85.863429137469,
+    "maps_url": "https://maps.google.com/?q=601+N+WEST+ST%2C+WARSAW"
+  },
+  {
+    "address": "805 E FORT WAYNE ST",
+    "city": "WARSAW",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.240092457424,
+    "lng": -85.846349282126,
+    "maps_url": "https://maps.google.com/?q=805+E+FORT+WAYNE+ST%2C+WARSAW"
+  },
+  {
+    "address": "111 WOODLAWN DR",
+    "city": "WARSAW",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.226282786634,
+    "lng": -85.854496580872,
+    "maps_url": "https://maps.google.com/?q=111+WOODLAWN+DR%2C+WARSAW"
+  },
+  {
+    "address": "1806 ROSEMONT AVE",
+    "city": "WARSAW",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.243239095539,
+    "lng": -85.883713063264,
+    "maps_url": "https://maps.google.com/?q=1806+ROSEMONT+AVE%2C+WARSAW"
+  },
+  {
+    "address": "1310 E ISLAND VIEW DR",
+    "city": "WARSAW",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.22284628514,
+    "lng": -85.84067626487,
+    "maps_url": "https://maps.google.com/?q=1310+E+ISLAND+VIEW+DR%2C+WARSAW"
+  },
+  {
+    "address": "1994 DAUSHA CT",
+    "city": "WARSAW",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.213386263287,
+    "lng": -85.855711812271,
+    "maps_url": "https://maps.google.com/?q=1994+DAUSHA+CT%2C+WARSAW"
+  },
+  {
+    "address": "433 S COLUMBIA ST",
+    "city": "WARSAW",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.234238069405,
+    "lng": -85.860518113809,
+    "maps_url": "https://maps.google.com/?q=433+S+COLUMBIA+ST%2C+WARSAW"
+  },
+  {
+    "address": "617 S BUFFALO ST",
+    "city": "WARSAW",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.232406688058,
+    "lng": -85.856579955687,
+    "maps_url": "https://maps.google.com/?q=617+S+BUFFALO+ST%2C+WARSAW"
+  },
+  {
+    "address": "2051 HEMLOCK LN",
+    "city": "WARSAW",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.210959087516,
+    "lng": -85.863593066712,
+    "maps_url": "https://maps.google.com/?q=2051+HEMLOCK+LN%2C+WARSAW"
+  },
+  {
+    "address": "502 OLDFATHER ST",
+    "city": "WARSAW",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.252127864138,
+    "lng": -85.851124145779,
+    "maps_url": "https://maps.google.com/?q=502+OLDFATHER+ST%2C+WARSAW"
+  },
+  {
+    "address": "22 FAIRLANE DR",
+    "city": "WARSAW",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.229287418237,
+    "lng": -85.840273391746,
+    "maps_url": "https://maps.google.com/?q=22+FAIRLANE+DR%2C+WARSAW"
+  },
+  {
+    "address": "2006 Co RD 10",
+    "city": "WATERLOO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.489748448605,
+    "lng": -85.099092936129,
+    "maps_url": "https://maps.google.com/?q=2006+Co+RD+10%2C+WATERLOO"
+  },
+  {
+    "address": "735 E MARION ST",
+    "city": "WATERLOO",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.432177580194,
+    "lng": -85.013509778716,
+    "maps_url": "https://maps.google.com/?q=735+E+MARION+ST%2C+WATERLOO"
+  },
+  {
+    "address": "235 PARK ST",
+    "city": "WATERVLIET",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.185803087373,
+    "lng": -86.263717664865,
+    "maps_url": "https://maps.google.com/?q=235+PARK+ST%2C+WATERVLIET"
+  },
+  {
+    "address": "316 HIGHVIEW ST",
+    "city": "WATERVLIET",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.188580059265,
+    "lng": -86.262642143877,
+    "maps_url": "https://maps.google.com/?q=316+HIGHVIEW+ST%2C+WATERVLIET"
+  },
+  {
+    "address": "317 BLUFFVIEW",
+    "city": "WATERVLIET",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.185050735607,
+    "lng": -86.258038436484,
+    "maps_url": "https://maps.google.com/?q=317+BLUFFVIEW%2C+WATERVLIET"
+  },
+  {
+    "address": "8267 VERLYNDA DR",
+    "city": "WATERVLIET",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.181813062492,
+    "lng": -86.257688201294,
+    "maps_url": "https://maps.google.com/?q=8267+VERLYNDA+DR%2C+WATERVLIET"
+  },
+  {
+    "address": "217 W SAINT JOSEPH ST",
+    "city": "WATERVLIET",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.186379967985,
+    "lng": -86.262803959629,
+    "maps_url": "https://maps.google.com/?q=217+W+SAINT+JOSEPH+ST%2C+WATERVLIET"
+  },
+  {
+    "address": "310 S PLEASANT ST",
+    "city": "WATERVLIET",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.184742120937,
+    "lng": -86.266334394741,
+    "maps_url": "https://maps.google.com/?q=310+S+PLEASANT+ST%2C+WATERVLIET"
+  },
+  {
+    "address": "4993 PARK DR",
+    "city": "WATERVLIET",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.202334788554,
+    "lng": -86.264456580637,
+    "maps_url": "https://maps.google.com/?q=4993+PARK+DR%2C+WATERVLIET"
+  },
+  {
+    "address": "5177 LAKE SHORE DR",
+    "city": "WATERVLIET",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.206559979126,
+    "lng": -86.254967433762,
+    "maps_url": "https://maps.google.com/?q=5177+LAKE+SHORE+DR%2C+WATERVLIET"
+  },
+  {
+    "address": "5316 LAKE SHORE DR",
+    "city": "WATERVLIET",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.207854352751,
+    "lng": -86.251800349363,
+    "maps_url": "https://maps.google.com/?q=5316+LAKE+SHORE+DR%2C+WATERVLIET"
+  },
+  {
+    "address": "5019 N WATERVLIET RD",
+    "city": "WATERVLIET",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.202355712223,
+    "lng": -86.25637258212,
+    "maps_url": "https://maps.google.com/?q=5019+N+WATERVLIET+RD%2C+WATERVLIET"
+  },
+  {
+    "address": "7540 PAW PAW AVE",
+    "city": "WATERVLIET",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.193155191564,
+    "lng": -86.275246989068,
+    "maps_url": "https://maps.google.com/?q=7540+PAW+PAW+AVE%2C+WATERVLIET"
+  },
+  {
+    "address": "424 LUCINDA LN",
+    "city": "WATERVLIET",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.183547748883,
+    "lng": -86.265279526364,
+    "maps_url": "https://maps.google.com/?q=424+LUCINDA+LN%2C+WATERVLIET"
+  },
+  {
+    "address": "7606 FLORENCE AVE",
+    "city": "WATERVLIET",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.195534721594,
+    "lng": -86.274510927232,
+    "maps_url": "https://maps.google.com/?q=7606+FLORENCE+AVE%2C+WATERVLIET"
+  },
+  {
+    "address": "8400 W ORCHARD AVE",
+    "city": "WATERVLIET",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.211083090377,
+    "lng": -86.250656958708,
+    "maps_url": "https://maps.google.com/?q=8400+W+ORCHARD+AVE%2C+WATERVLIET"
+  },
+  {
+    "address": "207 N PLEASANT ST",
+    "city": "WATERVLIET",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 42.187147887584,
+    "lng": -86.266320218574,
+    "maps_url": "https://maps.google.com/?q=207+N+PLEASANT+ST%2C+WATERVLIET"
+  },
+  {
+    "address": "3617 GARDEN ST",
+    "city": "WAYLAND",
+    "county": "Allegan County",
+    "township": "Wayland Township",
+    "state": "",
+    "lat": 42.682401632966,
+    "lng": -85.647142976773,
+    "maps_url": "https://maps.google.com/?q=3617+GARDEN+ST%2C+WAYLAND"
+  },
+  {
+    "address": "430 E SUPERIOR ST",
+    "city": "WAYLAND",
+    "county": "Allegan County",
+    "township": "Wayland Township",
+    "state": "",
+    "lat": 42.673757515007,
+    "lng": -85.637050939712,
+    "maps_url": "https://maps.google.com/?q=430+E+SUPERIOR+ST%2C+WAYLAND"
+  },
+  {
+    "address": "4406 12TH ST",
+    "city": "WAYLAND",
+    "county": "Allegan County",
+    "township": "Wayland Township",
+    "state": "",
+    "lat": 42.739774330303,
+    "lng": -85.663098762973,
+    "maps_url": "https://maps.google.com/?q=4406+12TH+ST%2C+WAYLAND"
+  },
+  {
+    "address": "426 PEACH CT",
+    "city": "WAYLAND",
+    "county": "Allegan County",
+    "township": "Wayland Township",
+    "state": "",
+    "lat": 42.669369515799,
+    "lng": -85.636922523056,
+    "maps_url": "https://maps.google.com/?q=426+PEACH+CT%2C+WAYLAND"
+  },
+  {
+    "address": "529 CHURCH ST",
+    "city": "WAYLAND",
+    "county": "Allegan County",
+    "township": "Wayland Township",
+    "state": "",
+    "lat": 42.679149282487,
+    "lng": -85.64514010124,
+    "maps_url": "https://maps.google.com/?q=529+CHURCH+ST%2C+WAYLAND"
+  },
+  {
+    "address": "323 STANDISH DR",
+    "city": "WAYLAND",
+    "county": "Allegan County",
+    "township": "Wayland Township",
+    "state": "",
+    "lat": 42.671672395205,
+    "lng": -85.635099074369,
+    "maps_url": "https://maps.google.com/?q=323+STANDISH+DR%2C+WAYLAND"
+  },
+  {
+    "address": "3622 URBAN DEPOT CT",
+    "city": "WAYLAND",
+    "county": "Allegan County",
+    "township": "Wayland Township",
+    "state": "",
+    "lat": 42.6828048,
+    "lng": -85.651497,
+    "maps_url": "https://maps.google.com/?q=3622+URBAN+DEPOT+CT%2C+WAYLAND"
+  },
+  {
+    "address": "124 E SYCAMORE ST",
+    "city": "WAYLAND",
+    "county": "Allegan County",
+    "township": "Wayland Township",
+    "state": "",
+    "lat": 42.671472533408,
+    "lng": -85.64276334232,
+    "maps_url": "https://maps.google.com/?q=124+E+SYCAMORE+ST%2C+WAYLAND"
+  },
+  {
+    "address": "124 E SYCAMORE ST",
+    "city": "WAYLAND",
+    "county": "Allegan County",
+    "township": "Wayland Township",
+    "state": "",
+    "lat": 42.671472533408,
+    "lng": -85.64276334232,
+    "maps_url": "https://maps.google.com/?q=124+E+SYCAMORE+ST%2C+WAYLAND"
+  },
+  {
+    "address": "632 W SUPERIOR ST",
+    "city": "WAYLAND",
+    "county": "Allegan County",
+    "township": "Wayland Township",
+    "state": "",
+    "lat": 42.67397096512,
+    "lng": -85.650723737643,
+    "maps_url": "https://maps.google.com/?q=632+W+SUPERIOR+ST%2C+WAYLAND"
+  },
+  {
+    "address": "632 W SUPERIOR ST",
+    "city": "WAYLAND",
+    "county": "Allegan County",
+    "township": "Wayland Township",
+    "state": "",
+    "lat": 42.67397096512,
+    "lng": -85.650723737643,
+    "maps_url": "https://maps.google.com/?q=632+W+SUPERIOR+ST%2C+WAYLAND"
+  },
+  {
+    "address": "69270 S KALAMAZOO ST",
+    "city": "WHITE PIGEON",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.790766397162,
+    "lng": -85.643251842681,
+    "maps_url": "https://maps.google.com/?q=69270+S+KALAMAZOO+ST%2C+WHITE+PIGEON"
+  },
+  {
+    "address": "101 E VERMONT AVE",
+    "city": "WHITE PIGEON",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.800229454384,
+    "lng": -85.64236242525,
+    "maps_url": "https://maps.google.com/?q=101+E+VERMONT+AVE%2C+WHITE+PIGEON"
+  },
+  {
+    "address": "212 S LINCOLN ST",
+    "city": "WHITE PIGEON",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.796570110605,
+    "lng": -85.639615827689,
+    "maps_url": "https://maps.google.com/?q=212+S+LINCOLN+ST%2C+WHITE+PIGEON"
+  },
+  {
+    "address": "212 S LINCOLN ST",
+    "city": "WHITE PIGEON",
+    "county": "",
+    "township": "",
+    "state": "",
+    "lat": 41.796570110605,
+    "lng": -85.639615827689,
+    "maps_url": "https://maps.google.com/?q=212+S+LINCOLN+ST%2C+WHITE+PIGEON"
+  },
+  {
+    "address": "900 ROBSON RD",
+    "city": "WINONA LAKE",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.222168339429,
+    "lng": -85.811185813434,
+    "maps_url": "https://maps.google.com/?q=900+ROBSON+RD%2C+WINONA+LAKE"
+  },
+  {
+    "address": "406 ROBSON RD",
+    "city": "WINONA LAKE",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.222096703748,
+    "lng": -85.816379774459,
+    "maps_url": "https://maps.google.com/?q=406+ROBSON+RD%2C+WINONA+LAKE"
+  },
+  {
+    "address": "405 KINGS HWY",
+    "city": "WINONA LAKE",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.229201825145,
+    "lng": -85.81786904261,
+    "maps_url": "https://maps.google.com/?q=405+KINGS+HWY%2C+WINONA+LAKE"
+  },
+  {
+    "address": "113 9TH ST",
+    "city": "WINONA LAKE",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.226351148099,
+    "lng": -85.819470976774,
+    "maps_url": "https://maps.google.com/?q=113+9TH+ST%2C+WINONA+LAKE"
+  },
+  {
+    "address": "210 14TH ST",
+    "city": "WINONA LAKE",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.223025038348,
+    "lng": -85.818087106713,
+    "maps_url": "https://maps.google.com/?q=210+14TH+ST%2C+WINONA+LAKE"
+  },
+  {
+    "address": "503 ROBSON RD",
+    "city": "WINONA LAKE",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.22222452352,
+    "lng": -85.815373098825,
+    "maps_url": "https://maps.google.com/?q=503+ROBSON+RD%2C+WINONA+LAKE"
+  },
+  {
+    "address": "907 SUNDAY LN",
+    "city": "WINONA LAKE",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
+    "state": "",
+    "lat": 41.226249914244,
+    "lng": -85.820105029626,
+    "maps_url": "https://maps.google.com/?q=907+SUNDAY+LN%2C+WINONA+LAKE"
+  }
+];
+
+// ════════════════════════════════════════════════════════════════════════════
+//  MAP INIT
+// ════════════════════════════════════════════════════════════════════════════
+const map = L.map('map', {
+  zoomControl: true,
+  preferCanvas: true,   // better performance for many markers
+});
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a> contributors © <a href="https://carto.com/">CARTO</a>',
+  subdomains: 'abcd',
+  maxZoom: 19,
+}).addTo(map);
+
+// ════════════════════════════════════════════════════════════════════════════
+//  COLORS
+// ════════════════════════════════════════════════════════════════════════════
+const C = {
+  default:  '#9ca3af',
+  selected: '#3b82f6',
+  close:    '#22c55e',
+  medium:   '#eab308',
+  far:      '#ef4444',
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+//  HAVERSINE  (great-circle distance in km)
+// ════════════════════════════════════════════════════════════════════════════
+function haversine(a, b) {
+  const R = 6371;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const chord =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.lat * Math.PI / 180) *
+    Math.cos(b.lat * Math.PI / 180) *
+    Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(chord), Math.sqrt(1 - chord));
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  MARKERS
+// ════════════════════════════════════════════════════════════════════════════
+function markerOpts(color, big) {
+  return {
+    radius: big ? 9 : 7,
+    fillColor: color,
+    color: '#ffffff',
+    weight: big ? 2.5 : 1.5,
+    opacity: 1,
+    fillOpacity: 0.92,
+  };
+}
+
+const markers = ADDRESSES.map((a, i) => {
+  const m = L.circleMarker([a.lat, a.lng], markerOpts(C.default, false));
+
+  // Popup built on-open so distance is current
+  m.bindPopup(() => buildPopup(i), { maxWidth: 260, autoPan: true });
+
+  m.on('click', (e) => { L.DomEvent.stopPropagation(e); selectNode(i); });
+  m.on('mouseover', () => { if (selectedIdx === null) showHoverLines(i); });
+  m.on('mouseout',  () => { if (selectedIdx === null) clearHoverLines(); });
+
+  m.addTo(map);
+  return m;
+});
+
+function buildPopup(i) {
+  const a = ADDRESSES[i];
+  let distHtml = '';
+  if (selectedIdx !== null && selectedIdx !== i) {
+    const km = haversine(ADDRESSES[selectedIdx], a);
+    const mi = (km * 0.621371).toFixed(1);
+    distHtml = `<div class="popup-dist">${mi} mi from selected</div>`;
+  }
+  const meta = [a.county, a.township].filter(Boolean).join(' · ');
+  const metaHtml = meta ? `<div class="popup-meta">${meta}</div>` : '';
+  return `
+    <div class="popup-address">${a.address}</div>
+    <div class="popup-city">${a.city}${a.state ? ', ' + a.state : ''}</div>
+    ${metaHtml}
+    ${distHtml}
+    <a class="popup-link" href="${a.maps_url}" target="_blank">Open in Google Maps ↗</a>
+  `;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════════════════════════
+let selectedIdx = null;
+let hoverLines  = [];
+let clickLines  = [];
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SELECTION  &  PROXIMITY COLORING
+// ════════════════════════════════════════════════════════════════════════════
+function selectNode(i) {
+  if (selectedIdx === i) { resetAll(); return; }
+
+  selectedIdx = i;
+  clearHoverLines();
+  clearClickLines();
+
+  applyProximityColors(i);
+  drawClickLines(i);
+
+  markers[i].setStyle(markerOpts(C.selected, true));
+  markers[i].openPopup();
+
+  const addr = ADDRESSES[i].address;
+  document.getElementById('selected-label').textContent = `📍 ${addr}`;
+  document.getElementById('reset-btn').style.display = 'inline-block';
+}
+
+function applyProximityColors(centerIdx) {
+  const center = ADDRESSES[centerIdx];
+
+  // Build ranked list (0 = self, 1-5 = close, 6-15 = medium, 16+ = far)
+  const ranked = ADDRESSES
+    .map((a, i) => ({ i, dist: haversine(center, a) }))
+    .sort((a, b) => a.dist - b.dist);
+
+  ranked.forEach(({ i }, rank) => {
+    if (i === centerIdx) return; // handled separately
+    let color;
+    if (rank <= 5)       color = C.close;
+    else if (rank <= 15) color = C.medium;
+    else                 color = C.far;
+    markers[i].setStyle(markerOpts(color, false));
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  LINES
+// ════════════════════════════════════════════════════════════════════════════
+function nearestN(centerIdx, n) {
+  const center = ADDRESSES[centerIdx];
+  return ADDRESSES
+    .map((a, i) => ({ i, dist: haversine(center, a) }))
+    .filter(x => x.i !== centerIdx)
+    .sort((a, b) => a.dist - b.dist)
+    .slice(0, n);
+}
+
+function drawLine(from, to, opacity, dashed) {
+  return L.polyline(
+    [[from.lat, from.lng], [to.lat, to.lng]],
+    { color: '#60a5fa', weight: 1.5, opacity, dashArray: dashed ? '6 5' : null }
+  ).addTo(map);
+}
+
+function showHoverLines(idx) {
+  clearHoverLines();
+  const center = ADDRESSES[idx];
+  nearestN(idx, 5).forEach(({ i, dist }) => {
+    const op = Math.max(0.15, 1 - dist / 60);
+    hoverLines.push(drawLine(center, ADDRESSES[i], op, true));
+  });
+}
+function clearHoverLines() { hoverLines.forEach(l => map.removeLayer(l)); hoverLines = []; }
+
+function drawClickLines(idx) {
+  clearClickLines();
+  const center = ADDRESSES[idx];
+  nearestN(idx, 15).forEach(({ i, dist }) => {
+    const op = Math.max(0.2, 1 - dist / 100);
+    clickLines.push(drawLine(center, ADDRESSES[i], op, false));
+  });
+}
+function clearClickLines() { clickLines.forEach(l => map.removeLayer(l)); clickLines = []; }
+
+// ════════════════════════════════════════════════════════════════════════════
+//  RESET
+// ════════════════════════════════════════════════════════════════════════════
+function resetAll() {
+  selectedIdx = null;
+  clearHoverLines();
+  clearClickLines();
+  markers.forEach(m => m.setStyle(markerOpts(C.default, false)));
+  map.closePopup();
+  document.getElementById('selected-label').textContent = '';
+  document.getElementById('reset-btn').style.display = 'none';
+}
+
+// Click on map background → reset
+map.on('click', resetAll);
+
+// ════════════════════════════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════════════════════════════
+document.getElementById('count-label').textContent = `${ADDRESSES.length} addresses`;
+
+if (ADDRESSES.length > 0) {
+  const bounds = L.latLngBounds(ADDRESSES.map(a => [a.lat, a.lng]));
+  map.fitBounds(bounds.pad(0.08));
+} else {
+  map.setView([41.5, -86.0], 9);
+  document.getElementById('loading').innerHTML =
+    '<div style="color:#ef4444;font-size:14px">No geocoded addresses found.</div>';
+}
+
+// Hide loading screen once tiles start loading
+map.once('load', () => document.getElementById('loading').style.display = 'none');
+setTimeout(() => document.getElementById('loading').style.display = 'none', 2500);
+</script>
+</body>
+</html>
