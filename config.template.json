@@ -6,6 +6,7 @@
   "cache_dir": "~/path/to/epicfiber-maps/cache",
   "repo_path": "~/path/to/epicfiber-maps",
   "auto_push": true,
+  "google_maps_api_key": "YOUR_GOOGLE_MAPS_API_KEY",
   "tabs": {
     "TEMPORARY LOCATES": "TAB_GID_1",
     "BURY / DWB": "TAB_GID_2"

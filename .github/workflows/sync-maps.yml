@@ -1,0 +1,82 @@
+name: Sync Maps
+
+# Runs daily at 6 AM CST (11:00 UTC) and can be triggered manually
+# from the Actions tab in GitHub with one click.
+on:
+  schedule:
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to commit & push updated docs/
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      # Restore geocode cache from previous run so we only geocode NEW addresses
+      - name: Restore geocode cache
+        uses: actions/cache@v4
+        with:
+          path: cache/
+          key: geocode-cache-${{ github.run_id }}
+          restore-keys: |
+            geocode-cache-
+
+      # Write service account JSON from GitHub Secret to a temp file
+      - name: Write service account credentials
+        env:
+          SA_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
+        run: echo "$SA_JSON" > service_account.json
+
+      # Build config.json from secrets — never stored in the repo
+      - name: Write config.json
+        env:
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, os
+          config = {
+            "spreadsheet_id":      os.environ["SPREADSHEET_ID"],
+            "service_account_path":"./service_account.json",
+            "docs_dir":            "./docs",
+            "cache_dir":           "./cache",
+            "repo_path":           ".",
+            "auto_push":           False,
+            "google_maps_api_key": os.environ["GOOGLE_MAPS_API_KEY"],
+            "tabs": {
+              "TEMPORARY LOCATES": "1043159223",
+              "BURY / DWB":        "1898822134"
+            }
+          }
+          with open("config.json", "w") as f:
+              json.dump(config, f, indent=2)
+          print("config.json written.")
+          PYEOF
+
+      - name: Run map sync
+        env:
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+        run: python3 src/generate_map.py
+
+      - name: Commit and push updated maps
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/
+          git diff --staged --quiet && echo "No changes to commit." && exit 0
+          git commit -m "Auto-update maps $(date +'%Y-%m-%d %H:%M UTC')"
+          git push

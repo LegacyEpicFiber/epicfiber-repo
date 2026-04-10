@@ -76,6 +76,17 @@ REPO_PATH        = Path(cfg.get("repo_path", str(REPO_ROOT))).expanduser()
 NOMINATIM_UA  = "LegacyEpicFiber-AddressMap/1.0 (legacy.buryandbore@gmail.com)"
 GEOCODE_DELAY = 1.2   # seconds between Nominatim requests (respect rate limit)
 
+# Google Maps API key — env var takes precedence (set in GitHub Actions via Secret),
+# falls back to value in config.json for local runs.
+GOOGLE_MAPS_KEY = (
+    os.environ.get("GOOGLE_MAPS_API_KEY")
+    or cfg.get("google_maps_api_key", "")
+)
+
+# Detect GitHub Actions environment so we skip the local git-push step
+# (Actions handles the commit/push itself via the workflow file).
+IN_CI = os.environ.get("GITHUB_ACTIONS") == "true"
+
 # Cities in Michigan — everything else defaults to Indiana
 MICHIGAN_CITIES = {
     "BARODA", "BRIDGMAN", "BYRON CENTER", "CASSOPOLIS",
@@ -232,6 +243,29 @@ def _clean_address(address):
     address = re.sub(r'\bCO\.?\s*R(?:OA)?D\.?\b', 'County Road', address, flags=re.IGNORECASE)
     return address.strip()
 
+def _geocode_google(clean_addr, city, state, api_key):
+    """Primary geocoder — Google Maps Geocoding API.
+    Much higher success rate than Census/Nominatim for rural routes,
+    partial addresses, and non-standard formats."""
+    query = urllib.parse.quote_plus(f"{clean_addr}, {city}, {state}, USA")
+    url   = f"https://maps.googleapis.com/maps/api/geocode/json?address={query}&key={api_key}"
+    req   = urllib.request.Request(url, headers={"User-Agent": NOMINATIM_UA})
+    try:
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            data = json.loads(resp.read())
+        status = data.get("status")
+        if status == "OK":
+            loc = data["results"][0]["geometry"]["location"]
+            return {"lat": loc["lat"], "lng": loc["lng"]}
+        if status not in ("ZERO_RESULTS",):
+            # Log unexpected statuses (REQUEST_DENIED, OVER_QUERY_LIMIT, etc.)
+            print(f"    ℹ  Google geocoder status {status!r}: {clean_addr}, {city}")
+    except Exception as e:
+        if not getattr(_geocode_google, "_err_shown", False):
+            print(f"    ℹ  Google geocoder unavailable ({e}), using fallbacks")
+            _geocode_google._err_shown = True
+    return None
+
 def _geocode_census(clean_addr, city, state):
     params = urllib.parse.urlencode({
         "address":   f"{clean_addr}, {city}, {state}",
@@ -273,7 +307,13 @@ def geocode(address, city, cache):
         return cache[key]
     state      = _state_for(city)
     clean_addr = _clean_address(address)
-    result     = _geocode_census(clean_addr, city, state)
+
+    # Geocoder waterfall: Google → Census → Nominatim
+    result = None
+    if GOOGLE_MAPS_KEY:
+        result = _geocode_google(clean_addr, city, state, GOOGLE_MAPS_KEY)
+    if not result:
+        result = _geocode_census(clean_addr, city, state)
     if not result:
         result = _geocode_nominatim(clean_addr, city, state)
     if not result:
@@ -427,12 +467,15 @@ def main():
 
     write_metadata(tab_counts)
 
-    if AUTO_PUSH:
+    # In GitHub Actions, the workflow handles the commit/push — skip it here.
+    if AUTO_PUSH and not IN_CI:
         push_to_github()
 
     print("\n═══════════════════════════════════════")
     print("  Done!")
-    if AUTO_PUSH:
+    if IN_CI:
+        print("  Running in CI — workflow will commit & push.")
+    elif AUTO_PUSH:
         print("  Maps are live at your GitHub Pages URL.")
     else:
         print("  Run: git push   to publish to GitHub Pages.")
