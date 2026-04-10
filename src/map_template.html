@@ -53,6 +53,21 @@
     line-height: 1.6;
   }
 
+  /* ── HOVER TOOLTIP ── */
+  .leaflet-tooltip.addr-tip {
+    background: #1e293b;
+    border: 1px solid #475569;
+    border-radius: 7px;
+    color: #e2e8f0;
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 7px 11px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .leaflet-tooltip.addr-tip::before { display: none; }
+
   /* ── POPUPS ── */
   .leaflet-popup-content-wrapper {
     background: #1e293b !important;
@@ -124,8 +139,8 @@
 
 <!-- Instructions -->
 <div id="instructions">
+  <strong style="color:#64748b">Hover</strong> → address + nearest 5 lines<br>
   <strong style="color:#64748b">Click</strong> any dot → proximity view<br>
-  <strong style="color:#64748b">Hover</strong> → nearest 5 lines<br>
   <strong style="color:#64748b">Click again</strong> → deselect
 </div>
 
@@ -195,6 +210,10 @@ function markerOpts(color, big) {
 const markers = ADDRESSES.map((a, i) => {
   const m = L.circleMarker([a.lat, a.lng], markerOpts(C.default, false));
   m.bindPopup(() => buildPopup(i), { maxWidth: 260, autoPan: true });
+  m.bindTooltip(
+    () => `<strong>${a.address}</strong><br><span style="color:#94a3b8">${a.city}${a.state ? ', ' + a.state : ''}</span>`,
+    { sticky: true, direction: 'top', offset: [0, -8], className: 'addr-tip', opacity: 0.97 }
+  );
   m.on('click', (e) => { L.DomEvent.stopPropagation(e); selectNode(i); });
   m.on('mouseover', () => { if (selectedIdx === null) showHoverLines(i); });
   m.on('mouseout',  () => { if (selectedIdx === null) clearHoverLines(); });
