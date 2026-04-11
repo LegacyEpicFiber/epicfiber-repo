@@ -427,6 +427,34 @@ if (ADDRESSES.length > 0) {
 
 map.once('load', () => document.getElementById('loading').style.display = 'none');
 setTimeout(() => document.getElementById('loading').style.display = 'none', 2500);
+
+// ════════════════════════════════════════════════════════════════════════════
+//  BROWSER ZOOM GUARD
+//  On Mac trackpads, Chrome/Brave represents pinch gestures as wheel events
+//  with ctrlKey=true. Without intervention, this scales the ENTIRE PAGE and
+//  pushes the fixed-position legend panels off screen.
+//  Fix: preventDefault on those events so the browser never page-zooms.
+//  Leaflet still receives the same wheel event and zooms the MAP correctly.
+//  Also remaps Cmd/Ctrl +/- keyboard shortcuts to map zoom instead of page zoom.
+// ════════════════════════════════════════════════════════════════════════════
+window.addEventListener('wheel', e => {
+  if (e.ctrlKey) e.preventDefault();   // block page zoom; Leaflet still handles map zoom
+}, { passive: false });
+
+document.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const k = e.key;
+  if (k === '+' || k === '=' || k === 'Add') {
+    e.preventDefault(); map.zoomIn();
+  } else if (k === '-' || k === 'Subtract') {
+    e.preventDefault(); map.zoomOut();
+  } else if (k === '0') {
+    // Cmd+0: reset view to fit all addresses instead of resetting browser zoom
+    e.preventDefault();
+    if (ADDRESSES.length > 0)
+      map.fitBounds(L.latLngBounds(ADDRESSES.map(a => [a.lat, a.lng])).pad(0.08));
+  }
+});
 </script>
 </body>
 </html>
