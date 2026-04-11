@@ -108,7 +108,7 @@ These must be set at **Settings → Secrets and variables → Actions** in the r
 
 ---
 
-## Map Features (v1.0.1)
+## Map Features (v1.0.2)
 
 - **Hover** over any dot → tooltip shows address + city; dashed lines draw to nearest 5 neighbors
 - **Click** any dot → full proximity coloring, solid lines to nearest 15, popup with address + Google Maps link
@@ -118,6 +118,7 @@ These must be set at **Settings → Secrets and variables → Actions** in the r
   - *By Distance* — choose radius (10 / 25 / 50 mi); green = within radius, yellow = within 2× radius, red = beyond
 - **Completed jobs excluded** — rows highlighted `#00ff00` (neon green) in the sheet are filtered out of the map entirely
 - **Dark theme** throughout; CARTO Voyager base tiles
+- **Zoom conflict resolved** — Mac trackpad pinch and Cmd/Ctrl +/-/0 zoom the Leaflet map only; browser page zoom is suppressed
 
 ---
 
@@ -129,6 +130,7 @@ These must be set at **Settings → Secrets and variables → Actions** in the r
 | GitHub Actions run fails silently | Map goes stale | Check Actions tab periodically or set up email notifications |
 | Service account key rotated/revoked | Script cannot read Google Sheet | Update `SERVICE_ACCOUNT_JSON` secret with new key |
 | Local launchd job still present | Redundant double-run at 6 AM | Remove: `launchctl unload ~/Library/LaunchAgents/com.epicfiber.mapsync.plist && rm ~/Library/LaunchAgents/com.epicfiber.mapsync.plist` |
+| Mac trackpad pinch zooms entire page instead of map | Legend disappears off-screen; confusing UX | Fixed in v1.0.2: `window.addEventListener('wheel', e => { if (e.ctrlKey) e.preventDefault(); }, { passive: false })` intercepts pinch; Cmd/Ctrl +/-/0 remapped to Leaflet zoom |
 
 ---
 
@@ -151,3 +153,4 @@ python3 src/generate_map.py
 |---|---|---|
 | v1.0.0 | 2026-04-10 | Production release. GitHub Actions pipeline, Google geocoding (633-entry cache), Leaflet proximity maps, hover address tooltips |
 | v1.0.1 | 2026-04-10 | Count/Distance proximity toggle; exclude #00ff00 completed rows; hourly sync (was daily) |
+| v1.0.2 | 2026-04-11 | Fix browser page-zoom conflict: Mac trackpad pinch and Cmd/Ctrl +/-/0 now zoom Leaflet map only |
