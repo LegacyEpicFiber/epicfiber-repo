@@ -99,7 +99,8 @@
   .leaflet-popup-tip { background: #1e293b !important; }
   .leaflet-popup-close-button { color: #64748b !important; font-size: 16px !important; top: 8px !important; right: 10px !important; }
   .leaflet-popup-close-button:hover { color: #e2e8f0 !important; }
-  .popup-address { font-weight: 700; font-size: 14px; color: #f1f5f9; margin-bottom: 3px; }
+  .popup-address { font-weight: 700; font-size: 14px; color: #f1f5f9; margin-bottom: 2px; }
+  .popup-row { color: #475569; font-size: 11px; margin-bottom: 4px; letter-spacing: 0.03em; }
   .popup-city { color: #64748b; font-size: 12px; margin-bottom: 3px; }
   .popup-meta { color: #475569; font-size: 11px; margin-bottom: 10px; }
   .popup-dist { color: #60a5fa; font-size: 11px; margin-bottom: 10px; font-style: italic; }
@@ -188,7 +189,8 @@ const ADDRESSES = [
     "township": "Bremen Township",
     "lat": 41.446588436722,
     "lng": -86.147950341632,
-    "maps_url": "https://maps.google.com/?q=225+W+PLYMOUTH+ST%2C+BREMEN"
+    "maps_url": "https://maps.google.com/?q=225+W+PLYMOUTH+ST%2C+BREMEN",
+    "row_num": 2
   },
   {
     "address": "15889 Co Ro 8",
@@ -197,7 +199,8 @@ const ADDRESSES = [
     "township": "Jefferson Township",
     "lat": 41.7167388,
     "lng": -85.8173723,
-    "maps_url": "https://maps.google.com/?q=15889+Co+Ro+8%2C+BRISTOL"
+    "maps_url": "https://maps.google.com/?q=15889+Co+Ro+8%2C+BRISTOL",
+    "row_num": 3
   },
   {
     "address": "15938 County Road 8",
@@ -206,7 +209,8 @@ const ADDRESSES = [
     "township": "Jefferson Township",
     "lat": 41.717674951756,
     "lng": -85.772634407923,
-    "maps_url": "https://maps.google.com/?q=15938+County+Road+8%2C+BRISTOL"
+    "maps_url": "https://maps.google.com/?q=15938+County+Road+8%2C+BRISTOL",
+    "row_num": 4
   },
   {
     "address": "1134 S 500 E",
@@ -215,7 +219,8 @@ const ADDRESSES = [
     "township": "Columbia City",
     "lat": 41.144951951956,
     "lng": -85.396329122151,
-    "maps_url": "https://maps.google.com/?q=1134+S+500+E%2C+COLUMBIA+CITY"
+    "maps_url": "https://maps.google.com/?q=1134+S+500+E%2C+COLUMBIA+CITY",
+    "row_num": 5
   },
   {
     "address": "1180 E 500 N",
@@ -224,7 +229,8 @@ const ADDRESSES = [
     "township": "Columbia City",
     "lat": 41.23611423424,
     "lng": -85.469333170782,
-    "maps_url": "https://maps.google.com/?q=1180+E+500+N%2C+COLUMBIA+CITY"
+    "maps_url": "https://maps.google.com/?q=1180+E+500+N%2C+COLUMBIA+CITY",
+    "row_num": 6
   },
   {
     "address": "321 West 500 N",
@@ -233,7 +239,8 @@ const ADDRESSES = [
     "township": "Columbia City",
     "lat": 41.23590036348,
     "lng": -85.49835246294,
-    "maps_url": "https://maps.google.com/?q=321+West+500+N%2C+COLUMBIA+CITY"
+    "maps_url": "https://maps.google.com/?q=321+West+500+N%2C+COLUMBIA+CITY",
+    "row_num": 7
   },
   {
     "address": "5250 E LITTLE TURTLE TRL",
@@ -242,7 +249,8 @@ const ADDRESSES = [
     "township": "Columbia City",
     "lat": 41.152809113357,
     "lng": -85.393262122343,
-    "maps_url": "https://maps.google.com/?q=5250+E+LITTLE+TURTLE+TRL%2C+COLUMBIA+CITY"
+    "maps_url": "https://maps.google.com/?q=5250+E+LITTLE+TURTLE+TRL%2C+COLUMBIA+CITY",
+    "row_num": 8
   },
   {
     "address": "1209 CYRILLA DR",
@@ -251,7 +259,8 @@ const ADDRESSES = [
     "township": "Elkhart Township",
     "lat": 41.699569553439,
     "lng": -86.02557698095,
-    "maps_url": "https://maps.google.com/?q=1209+CYRILLA+DR%2C+ELKHART"
+    "maps_url": "https://maps.google.com/?q=1209+CYRILLA+DR%2C+ELKHART",
+    "row_num": 9
   },
   {
     "address": "1209 CYRILLA DR",
@@ -260,7 +269,8 @@ const ADDRESSES = [
     "township": "Elkhart Township",
     "lat": 41.699569553439,
     "lng": -86.02557698095,
-    "maps_url": "https://maps.google.com/?q=1209+CYRILLA+DR%2C+ELKHART"
+    "maps_url": "https://maps.google.com/?q=1209+CYRILLA+DR%2C+ELKHART",
+    "row_num": 10
   },
   {
     "address": "23930 DAHLIA CT",
@@ -269,7 +279,8 @@ const ADDRESSES = [
     "township": "Elkhart Township",
     "lat": 41.646808230717,
     "lng": -85.925521996635,
-    "maps_url": "https://maps.google.com/?q=23930+DAHLIA+CT%2C+ELKHART"
+    "maps_url": "https://maps.google.com/?q=23930+DAHLIA+CT%2C+ELKHART",
+    "row_num": 11
   },
   {
     "address": "25885 LAKE DR",
@@ -278,7 +289,8 @@ const ADDRESSES = [
     "township": "Elkhart Township",
     "lat": 41.746671396954,
     "lng": -85.9642449204,
-    "maps_url": "https://maps.google.com/?q=25885+LAKE+DR%2C+ELKHART"
+    "maps_url": "https://maps.google.com/?q=25885+LAKE+DR%2C+ELKHART",
+    "row_num": 12
   },
   {
     "address": "30359 S MEADOW BROOK LN",
@@ -287,7 +299,8 @@ const ADDRESSES = [
     "township": "Elkhart Township",
     "lat": 41.69970106921,
     "lng": -86.04979856594,
-    "maps_url": "https://maps.google.com/?q=30359+S+MEADOW+BROOK+LN%2C+ELKHART"
+    "maps_url": "https://maps.google.com/?q=30359+S+MEADOW+BROOK+LN%2C+ELKHART",
+    "row_num": 13
   },
   {
     "address": "58558 SHEENA LN",
@@ -296,7 +309,8 @@ const ADDRESSES = [
     "township": "Elkhart Township",
     "lat": 41.6441861,
     "lng": -86.0192526,
-    "maps_url": "https://maps.google.com/?q=58558+SHEENA+LN%2C+ELKHART"
+    "maps_url": "https://maps.google.com/?q=58558+SHEENA+LN%2C+ELKHART",
+    "row_num": 14
   },
   {
     "address": "4130 BASSWOOD DR",
@@ -305,7 +319,8 @@ const ADDRESSES = [
     "township": "Goshen Township",
     "lat": 41.606106804145,
     "lng": -85.899849902051,
-    "maps_url": "https://maps.google.com/?q=4130+BASSWOOD+DR%2C+GOSHEN"
+    "maps_url": "https://maps.google.com/?q=4130+BASSWOOD+DR%2C+GOSHEN",
+    "row_num": 15
   },
   {
     "address": "4211 TYLER LN",
@@ -314,7 +329,8 @@ const ADDRESSES = [
     "township": "Goshen Township",
     "lat": 41.607956763383,
     "lng": -85.900948989733,
-    "maps_url": "https://maps.google.com/?q=4211+TYLER+LN%2C+GOSHEN"
+    "maps_url": "https://maps.google.com/?q=4211+TYLER+LN%2C+GOSHEN",
+    "row_num": 16
   },
   {
     "address": "1022 S MAPLE ST",
@@ -323,7 +339,8 @@ const ADDRESSES = [
     "township": "Marion Township",
     "lat": 40.55164164377,
     "lng": -85.668226360973,
-    "maps_url": "https://maps.google.com/?q=1022+S+MAPLE+ST%2C+MARION"
+    "maps_url": "https://maps.google.com/?q=1022+S+MAPLE+ST%2C+MARION",
+    "row_num": 17
   },
   {
     "address": "1022 S MAPLE ST",
@@ -332,7 +349,8 @@ const ADDRESSES = [
     "township": "Marion Township",
     "lat": 40.55164164377,
     "lng": -85.668226360973,
-    "maps_url": "https://maps.google.com/?q=1022+S+MAPLE+ST%2C+MARION"
+    "maps_url": "https://maps.google.com/?q=1022+S+MAPLE+ST%2C+MARION",
+    "row_num": 18
   },
   {
     "address": "2518 S 500 E",
@@ -341,7 +359,8 @@ const ADDRESSES = [
     "township": "Marion Township",
     "lat": 40.516916938968,
     "lng": -85.577516526867,
-    "maps_url": "https://maps.google.com/?q=2518+S+500+E%2C+MARION"
+    "maps_url": "https://maps.google.com/?q=2518+S+500+E%2C+MARION",
+    "row_num": 19
   },
   {
     "address": "2711 S WASHINGTON ST",
@@ -350,7 +369,8 @@ const ADDRESSES = [
     "township": "Marion Township",
     "lat": 40.536586204782,
     "lng": -85.659725878789,
-    "maps_url": "https://maps.google.com/?q=2711+S+WASHINGTON+ST%2C+MARION"
+    "maps_url": "https://maps.google.com/?q=2711+S+WASHINGTON+ST%2C+MARION",
+    "row_num": 20
   },
   {
     "address": "2818 S GALLATIN ST",
@@ -359,7 +379,8 @@ const ADDRESSES = [
     "township": "Marion Township",
     "lat": 40.535537734351,
     "lng": -85.66221233059,
-    "maps_url": "https://maps.google.com/?q=2818+S+GALLATIN+ST%2C+MARION"
+    "maps_url": "https://maps.google.com/?q=2818+S+GALLATIN+ST%2C+MARION",
+    "row_num": 21
   },
   {
     "address": "5935 RED FOX DR",
@@ -368,7 +389,8 @@ const ADDRESSES = [
     "township": "Marion Township",
     "lat": 40.638811556857,
     "lng": -85.684771272815,
-    "maps_url": "https://maps.google.com/?q=5935+RED+FOX+DR%2C+MARION"
+    "maps_url": "https://maps.google.com/?q=5935+RED+FOX+DR%2C+MARION",
+    "row_num": 22
   },
   {
     "address": "6066 N E 00 W",
@@ -377,7 +399,8 @@ const ADDRESSES = [
     "township": "Marion Township",
     "lat": 40.640619582954,
     "lng": -85.675178767454,
-    "maps_url": "https://maps.google.com/?q=6066+N+E+00+W%2C+MARION"
+    "maps_url": "https://maps.google.com/?q=6066+N+E+00+W%2C+MARION",
+    "row_num": 23
   },
   {
     "address": "903 W 9TH ST",
@@ -386,7 +409,8 @@ const ADDRESSES = [
     "township": "Marion Township",
     "lat": 40.552719082428,
     "lng": -85.669405753903,
-    "maps_url": "https://maps.google.com/?q=903+W+9TH+ST%2C+MARION"
+    "maps_url": "https://maps.google.com/?q=903+W+9TH+ST%2C+MARION",
+    "row_num": 24
   },
   {
     "address": "931 N E 00 W",
@@ -395,7 +419,8 @@ const ADDRESSES = [
     "township": "Marion Township",
     "lat": 40.6338153,
     "lng": -85.6751916,
-    "maps_url": "https://maps.google.com/?q=931+N+E+00+W%2C+MARION"
+    "maps_url": "https://maps.google.com/?q=931+N+E+00+W%2C+MARION",
+    "row_num": 25
   },
   {
     "address": "100 ORPHA DR",
@@ -404,7 +429,8 @@ const ADDRESSES = [
     "township": "",
     "lat": 41.6584479,
     "lng": -85.7089082,
-    "maps_url": "https://maps.google.com/?q=100+ORPHA+DR%2C+MIDDLEBURY"
+    "maps_url": "https://maps.google.com/?q=100+ORPHA+DR%2C+MIDDLEBURY",
+    "row_num": 26
   },
   {
     "address": "13166 Co Rd 14",
@@ -413,7 +439,8 @@ const ADDRESSES = [
     "township": "",
     "lat": 41.683059735351,
     "lng": -85.720357483762,
-    "maps_url": "https://maps.google.com/?q=13166+Co+Rd+14%2C+MIDDLEBURY"
+    "maps_url": "https://maps.google.com/?q=13166+Co+Rd+14%2C+MIDDLEBURY",
+    "row_num": 27
   },
   {
     "address": "130 W 7TH ST",
@@ -422,7 +449,8 @@ const ADDRESSES = [
     "township": "Peru Township",
     "lat": 40.754545313036,
     "lng": -86.075011544325,
-    "maps_url": "https://maps.google.com/?q=130+W+7TH+ST%2C+PERU"
+    "maps_url": "https://maps.google.com/?q=130+W+7TH+ST%2C+PERU",
+    "row_num": 28
   },
   {
     "address": "130 W 7TH ST",
@@ -431,7 +459,8 @@ const ADDRESSES = [
     "township": "Peru Township",
     "lat": 40.754545313036,
     "lng": -86.075011544325,
-    "maps_url": "https://maps.google.com/?q=130+W+7TH+ST%2C+PERU"
+    "maps_url": "https://maps.google.com/?q=130+W+7TH+ST%2C+PERU",
+    "row_num": 29
   },
   {
     "address": "2494 E 309TH RD",
@@ -440,7 +469,8 @@ const ADDRESSES = [
     "township": "Peru Township",
     "lat": 40.7582289,
     "lng": -86.079454,
-    "maps_url": "https://maps.google.com/?q=2494+E+309TH+RD%2C+PERU"
+    "maps_url": "https://maps.google.com/?q=2494+E+309TH+RD%2C+PERU",
+    "row_num": 30
   },
   {
     "address": "367 W 6TH ST",
@@ -449,7 +479,8 @@ const ADDRESSES = [
     "township": "Peru Township",
     "lat": 40.750422528789,
     "lng": -86.081506951599,
-    "maps_url": "https://maps.google.com/?q=367+W+6TH+ST%2C+PERU"
+    "maps_url": "https://maps.google.com/?q=367+W+6TH+ST%2C+PERU",
+    "row_num": 31
   },
   {
     "address": "955 CHERRY LN",
@@ -458,7 +489,8 @@ const ADDRESSES = [
     "township": "Peru Township",
     "lat": 40.739355787467,
     "lng": -86.047449673021,
-    "maps_url": "https://maps.google.com/?q=955+CHERRY+LN%2C+PERU"
+    "maps_url": "https://maps.google.com/?q=955+CHERRY+LN%2C+PERU",
+    "row_num": 32
   },
   {
     "address": "973 ROSEWOOD DR",
@@ -467,7 +499,8 @@ const ADDRESSES = [
     "township": "Peru Township",
     "lat": 40.740837786505,
     "lng": -86.047433311871,
-    "maps_url": "https://maps.google.com/?q=973+ROSEWOOD+DR%2C+PERU"
+    "maps_url": "https://maps.google.com/?q=973+ROSEWOOD+DR%2C+PERU",
+    "row_num": 33
   },
   {
     "address": "22520 KERN RD",
@@ -476,7 +509,8 @@ const ADDRESSES = [
     "township": "South Bend Township",
     "lat": 41.608272689238,
     "lng": -86.302895551869,
-    "maps_url": "https://maps.google.com/?q=22520+KERN+RD%2C+SOUTH+BEND"
+    "maps_url": "https://maps.google.com/?q=22520+KERN+RD%2C+SOUTH+BEND",
+    "row_num": 34
   },
   {
     "address": "515 thrive ST / APTO. 10 D",
@@ -485,7 +519,8 @@ const ADDRESSES = [
     "township": "South Bend Township",
     "lat": 41.683349,
     "lng": -86.200186,
-    "maps_url": "https://maps.google.com/?q=515+thrive+ST+%2F+APTO.+10+D%2C+SOUTH+BEND"
+    "maps_url": "https://maps.google.com/?q=515+thrive+ST+%2F+APTO.+10+D%2C+SOUTH+BEND",
+    "row_num": 35
   },
   {
     "address": "6660 IN-205",
@@ -494,7 +529,8 @@ const ADDRESSES = [
     "township": "Columbia Township",
     "lat": 41.0930955,
     "lng": -85.6266838,
-    "maps_url": "https://maps.google.com/?q=6660+IN-205%2C+SOUTH+WHITLEY"
+    "maps_url": "https://maps.google.com/?q=6660+IN-205%2C+SOUTH+WHITLEY",
+    "row_num": 36
   },
   {
     "address": "3012 HEMLOCK LN",
@@ -503,7 +539,8 @@ const ADDRESSES = [
     "township": "Wayne Township",
     "lat": 41.210264752442,
     "lng": -85.86345337283,
-    "maps_url": "https://maps.google.com/?q=3012+HEMLOCK+LN%2C+WARSAW"
+    "maps_url": "https://maps.google.com/?q=3012+HEMLOCK+LN%2C+WARSAW",
+    "row_num": 37
   },
   {
     "address": "3912 LAKE ST",
@@ -512,7 +549,8 @@ const ADDRESSES = [
     "township": "Weesaw Township",
     "lat": 41.942826965738,
     "lng": -86.548320370121,
-    "maps_url": "https://maps.google.com/?q=3912+LAKE+ST%2C+BRIDGMAN"
+    "maps_url": "https://maps.google.com/?q=3912+LAKE+ST%2C+BRIDGMAN",
+    "row_num": 38
   },
   {
     "address": "15335 CANARY DR",
@@ -521,7 +559,8 @@ const ADDRESSES = [
     "township": "Grand Haven Township",
     "lat": 43.041145163039,
     "lng": -86.169026943942,
-    "maps_url": "https://maps.google.com/?q=15335+CANARY+DR%2C+GRAND+HAVEN"
+    "maps_url": "https://maps.google.com/?q=15335+CANARY+DR%2C+GRAND+HAVEN",
+    "row_num": 39
   },
   {
     "address": "1045 W LINCOLN AVE",
@@ -530,7 +569,8 @@ const ADDRESSES = [
     "township": "",
     "lat": 42.987300521185,
     "lng": -85.082622883037,
-    "maps_url": "https://maps.google.com/?q=1045+W+LINCOLN+AVE%2C+IONIA"
+    "maps_url": "https://maps.google.com/?q=1045+W+LINCOLN+AVE%2C+IONIA",
+    "row_num": 40
   },
   {
     "address": "217 DYE ST",
@@ -539,7 +579,8 @@ const ADDRESSES = [
     "township": "",
     "lat": 42.983322689184,
     "lng": -85.069352557394,
-    "maps_url": "https://maps.google.com/?q=217+DYE+ST%2C+IONIA"
+    "maps_url": "https://maps.google.com/?q=217+DYE+ST%2C+IONIA",
+    "row_num": 41
   },
   {
     "address": "316 BLISS ST",
@@ -548,7 +589,8 @@ const ADDRESSES = [
     "township": "",
     "lat": 42.986378970752,
     "lng": -85.056845443873,
-    "maps_url": "https://maps.google.com/?q=316+BLISS+ST%2C+IONIA"
+    "maps_url": "https://maps.google.com/?q=316+BLISS+ST%2C+IONIA",
+    "row_num": 42
   },
   {
     "address": "322 STEVENSON ST",
@@ -557,7 +599,8 @@ const ADDRESSES = [
     "township": "",
     "lat": 42.986092670632,
     "lng": -85.04636236163,
-    "maps_url": "https://maps.google.com/?q=322+STEVENSON+ST%2C+IONIA"
+    "maps_url": "https://maps.google.com/?q=322+STEVENSON+ST%2C+IONIA",
+    "row_num": 43
   },
   {
     "address": "424 TAYLOR CT",
@@ -566,7 +609,8 @@ const ADDRESSES = [
     "township": "",
     "lat": 42.984896072335,
     "lng": -85.073590716559,
-    "maps_url": "https://maps.google.com/?q=424+TAYLOR+CT%2C+IONIA"
+    "maps_url": "https://maps.google.com/?q=424+TAYLOR+CT%2C+IONIA",
+    "row_num": 44
   },
   {
     "address": "447 E LINCOLN AVE",
@@ -575,7 +619,8 @@ const ADDRESSES = [
     "township": "",
     "lat": 42.987327519566,
     "lng": -85.052721431819,
-    "maps_url": "https://maps.google.com/?q=447+E+LINCOLN+AVE%2C+IONIA"
+    "maps_url": "https://maps.google.com/?q=447+E+LINCOLN+AVE%2C+IONIA",
+    "row_num": 45
   },
   {
     "address": "475 HARTER ST",
@@ -584,7 +629,8 @@ const ADDRESSES = [
     "township": "",
     "lat": 42.986663835975,
     "lng": -85.072695613693,
-    "maps_url": "https://maps.google.com/?q=475+HARTER+ST%2C+IONIA"
+    "maps_url": "https://maps.google.com/?q=475+HARTER+ST%2C+IONIA",
+    "row_num": 46
   },
   {
     "address": "615 PROSPECT ST",
@@ -593,7 +639,8 @@ const ADDRESSES = [
     "township": "",
     "lat": 42.989412450143,
     "lng": -85.049207713072,
-    "maps_url": "https://maps.google.com/?q=615+PROSPECT+ST%2C+IONIA"
+    "maps_url": "https://maps.google.com/?q=615+PROSPECT+ST%2C+IONIA",
+    "row_num": 47
   },
   {
     "address": "620 W MAIN ST",
@@ -602,7 +649,8 @@ const ADDRESSES = [
     "township": "",
     "lat": 42.982061521889,
     "lng": -85.072625877754,
-    "maps_url": "https://maps.google.com/?q=620+W+MAIN+ST%2C+IONIA"
+    "maps_url": "https://maps.google.com/?q=620+W+MAIN+ST%2C+IONIA",
+    "row_num": 48
   },
   {
     "address": "634 PROSPECT ST",
@@ -611,7 +659,8 @@ const ADDRESSES = [
     "township": "",
     "lat": 42.989523646148,
     "lng": -85.048828169161,
-    "maps_url": "https://maps.google.com/?q=634+PROSPECT+ST%2C+IONIA"
+    "maps_url": "https://maps.google.com/?q=634+PROSPECT+ST%2C+IONIA",
+    "row_num": 49
   },
   {
     "address": "700 E WASHINGTON ST",
@@ -620,7 +669,8 @@ const ADDRESSES = [
     "township": "",
     "lat": 42.985036317822,
     "lng": -85.047667112856,
-    "maps_url": "https://maps.google.com/?q=700+E+WASHINGTON+ST%2C+IONIA"
+    "maps_url": "https://maps.google.com/?q=700+E+WASHINGTON+ST%2C+IONIA",
+    "row_num": 50
   },
   {
     "address": "804 E LINCOLN AVE",
@@ -629,7 +679,8 @@ const ADDRESSES = [
     "township": "",
     "lat": 42.987432280112,
     "lng": -85.076782643802,
-    "maps_url": "https://maps.google.com/?q=804+E+LINCOLN+AVE%2C+IONIA"
+    "maps_url": "https://maps.google.com/?q=804+E+LINCOLN+AVE%2C+IONIA",
+    "row_num": 51
   },
   {
     "address": "89 DICKENS ST",
@@ -638,7 +689,8 @@ const ADDRESSES = [
     "township": "",
     "lat": 42.207957389441,
     "lng": -84.561958823517,
-    "maps_url": "https://maps.google.com/?q=89+DICKENS+ST%2C+SPRING+ARBOR"
+    "maps_url": "https://maps.google.com/?q=89+DICKENS+ST%2C+SPRING+ARBOR",
+    "row_num": 52
   },
   {
     "address": "1532 S CHERRY DR",
@@ -647,7 +699,8 @@ const ADDRESSES = [
     "township": "",
     "lat": 42.020313685588,
     "lng": -86.491277060428,
-    "maps_url": "https://maps.google.com/?q=1532+S+CHERRY+DR%2C+STEVENSVILLE"
+    "maps_url": "https://maps.google.com/?q=1532+S+CHERRY+DR%2C+STEVENSVILLE",
+    "row_num": 53
   },
   {
     "address": "332 BLUFFVIEW",
@@ -656,7 +709,8 @@ const ADDRESSES = [
     "township": "Watervliet Township",
     "lat": 42.184892226995,
     "lng": -86.258213973147,
-    "maps_url": "https://maps.google.com/?q=332+BLUFFVIEW%2C+WATERVLIET"
+    "maps_url": "https://maps.google.com/?q=332+BLUFFVIEW%2C+WATERVLIET",
+    "row_num": 54
   }
 ];
 
@@ -738,8 +792,10 @@ function buildPopup(i) {
   }
   const meta = [a.county, a.township].filter(Boolean).join(' · ');
   const metaHtml = meta ? `<div class="popup-meta">${meta}</div>` : '';
+  const rowHtml = a.row_num ? `<div class="popup-row">Row ${a.row_num}</div>` : '';
   return `
     <div class="popup-address">${a.address}</div>
+    ${rowHtml}
     <div class="popup-city">${a.city}${a.state ? ', ' + a.state : ''}</div>
     ${metaHtml}
     ${distHtml}
