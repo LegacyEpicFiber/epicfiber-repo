@@ -99,7 +99,8 @@
   .leaflet-popup-tip { background: #1e293b !important; }
   .leaflet-popup-close-button { color: #64748b !important; font-size: 16px !important; top: 8px !important; right: 10px !important; }
   .leaflet-popup-close-button:hover { color: #e2e8f0 !important; }
-  .popup-address { font-weight: 700; font-size: 14px; color: #f1f5f9; margin-bottom: 3px; }
+  .popup-address { font-weight: 700; font-size: 14px; color: #f1f5f9; margin-bottom: 2px; }
+  .popup-row { color: #475569; font-size: 11px; margin-bottom: 4px; letter-spacing: 0.03em; }
   .popup-city { color: #64748b; font-size: 12px; margin-bottom: 3px; }
   .popup-meta { color: #475569; font-size: 11px; margin-bottom: 10px; }
   .popup-dist { color: #60a5fa; font-size: 11px; margin-bottom: 10px; font-style: italic; }
@@ -260,8 +261,10 @@ function buildPopup(i) {
   }
   const meta = [a.county, a.township].filter(Boolean).join(' · ');
   const metaHtml = meta ? `<div class="popup-meta">${meta}</div>` : '';
+  const rowHtml = a.row_num ? `<div class="popup-row">Row ${a.row_num}</div>` : '';
   return `
     <div class="popup-address">${a.address}</div>
+    ${rowHtml}
     <div class="popup-city">${a.city}${a.state ? ', ' + a.state : ''}</div>
     ${metaHtml}
     ${distHtml}

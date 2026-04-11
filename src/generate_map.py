@@ -258,7 +258,9 @@ def fetch_tab(spreadsheet, gid):
         if i in green_indices:
             continue          # skip completed jobs
         padded = row + [""] * (len(headers) - len(row))
-        rows.append(dict(zip(headers, padded)))
+        d = dict(zip(headers, padded))
+        d["_row_num"] = i + 2  # spreadsheet row number (row 1 = header)
+        rows.append(d)
     return rows
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -406,6 +408,7 @@ def build_address_list(rows, cache):
             "lat":      coord["lat"],
             "lng":      coord["lng"],
             "maps_url": maps_url,
+            "row_num":  row.get("_row_num"),
         })
     print(f"    {len(out)} addresses ready  ({new_count} newly geocoded)")
     return out
