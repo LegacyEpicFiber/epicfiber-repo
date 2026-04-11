@@ -39,10 +39,24 @@
     border: 1px solid #334155; border-radius: 10px;
     padding: 12px 16px; z-index: 1000; font-size: 12px;
     box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    min-width: 176px;
   }
   #legend .legend-title { color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
   .legend-row { display: flex; align-items: center; gap: 8px; margin: 5px 0; color: #94a3b8; }
   .dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; border: 1.5px solid rgba(255,255,255,0.25); }
+
+  /* ── MODE TOGGLE ── */
+  .mode-btns, .dist-btns { display: flex; gap: 5px; margin: 6px 0 4px; }
+  .mode-btn, .dist-btn {
+    flex: 1; background: #1e293b; border: 1px solid #334155;
+    color: #94a3b8; border-radius: 5px; padding: 5px 6px;
+    font-size: 11px; font-weight: 600; cursor: pointer;
+    transition: all 0.15s; text-align: center; white-space: nowrap;
+  }
+  .mode-btn:hover, .dist-btn:hover { background: #334155; color: #e2e8f0; }
+  .mode-btn.active { background: #1d4ed8; border-color: #2563eb; color: #fff; }
+  .dist-btn.active { background: #0f766e; border-color: #0d9488; color: #fff; }
+  #dist-presets { margin-top: 8px; }
 
   /* ── INSTRUCTIONS ── */
   #instructions {
@@ -129,11 +143,26 @@
 
 <!-- Legend -->
 <div id="legend">
-  <div class="legend-title">Proximity from selected</div>
+  <div class="legend-title">Proximity Mode</div>
+  <div class="mode-btns">
+    <button id="mode-count" class="mode-btn active" onclick="setMode('count')">By Count</button>
+    <button id="mode-dist"  class="mode-btn"        onclick="setMode('distance')">By Distance</button>
+  </div>
+
+  <div id="dist-presets" style="display:none">
+    <div class="legend-title">Radius</div>
+    <div class="dist-btns">
+      <button class="dist-btn active" onclick="setRadius(10,  this)">10 mi</button>
+      <button class="dist-btn"        onclick="setRadius(25,  this)">25 mi</button>
+      <button class="dist-btn"        onclick="setRadius(50,  this)">50 mi</button>
+    </div>
+  </div>
+
+  <div class="legend-title" style="margin-top:10px">Color Key</div>
   <div class="legend-row"><div class="dot" style="background:#3b82f6"></div> Selected node</div>
-  <div class="legend-row"><div class="dot" style="background:#22c55e"></div> 5 closest</div>
-  <div class="legend-row"><div class="dot" style="background:#eab308"></div> Next 10 (6–15)</div>
-  <div class="legend-row"><div class="dot" style="background:#ef4444"></div> Farther (16+)</div>
+  <div class="legend-row"><div class="dot" style="background:#22c55e"></div> <span id="leg-close">5 closest</span></div>
+  <div class="legend-row"><div class="dot" style="background:#eab308"></div> <span id="leg-medium">Next 10 (6–15)</span></div>
+  <div class="legend-row"><div class="dot" style="background:#ef4444"></div> <span id="leg-far">Farther (16+)</span></div>
   <div class="legend-row"><div class="dot" style="background:#9ca3af"></div> Unselected</div>
 </div>
 
@@ -152,15 +181,6 @@
 //  DATA  (injected by generate_map.py)
 // ════════════════════════════════════════════════════════════════════════════
 const ADDRESSES = [
-  {
-    "address": "310 S GONSER AVE",
-    "city": "ASHLEY",
-    "county": "DeKalb County",
-    "township": "Ashley Township",
-    "lat": 41.52490228326,
-    "lng": -85.06444457747,
-    "maps_url": "https://maps.google.com/?q=310+S+GONSER+AVE%2C+ASHLEY"
-  },
   {
     "address": "301 S Garrison AVE / LOT. 9",
     "city": "ASHLEY",
@@ -459,42 +479,6 @@ const ADDRESSES = [
     "maps_url": "https://maps.google.com/?q=313+N+BROADWAY+ST%2C+BUTLER"
   },
   {
-    "address": "303 W LIBERTY ST",
-    "city": "BUTLER",
-    "county": "DeKalb County",
-    "township": "Butler Township",
-    "lat": 41.43268337294,
-    "lng": -84.873890570178,
-    "maps_url": "https://maps.google.com/?q=303+W+LIBERTY+ST%2C+BUTLER"
-  },
-  {
-    "address": "406 HIGH ST",
-    "city": "BUTLER",
-    "county": "DeKalb County",
-    "township": "Butler Township",
-    "lat": 41.431990009942,
-    "lng": -84.879887192771,
-    "maps_url": "https://maps.google.com/?q=406+HIGH+ST%2C+BUTLER"
-  },
-  {
-    "address": "3720 IN-1",
-    "city": "BUTLER",
-    "county": "DeKalb County",
-    "township": "Butler Township",
-    "lat": 41.399807298583,
-    "lng": -84.871760795635,
-    "maps_url": "https://maps.google.com/?q=3720+IN-1%2C+BUTLER"
-  },
-  {
-    "address": "108 MAXTON DR",
-    "city": "BUTLER",
-    "county": "DeKalb County",
-    "township": "Butler Township",
-    "lat": 41.435592453576,
-    "lng": -84.865592355981,
-    "maps_url": "https://maps.google.com/?q=108+MAXTON+DR%2C+BUTLER"
-  },
-  {
     "address": "369 N PARK LN",
     "city": "BUTLER",
     "county": "DeKalb County",
@@ -502,24 +486,6 @@ const ADDRESSES = [
     "lat": 41.434780371995,
     "lng": -84.862729793564,
     "maps_url": "https://maps.google.com/?q=369+N+PARK+LN%2C+BUTLER"
-  },
-  {
-    "address": "104 S PARK LN",
-    "city": "BUTLER",
-    "county": "DeKalb County",
-    "township": "Butler Township",
-    "lat": 41.433526251479,
-    "lng": -84.866011261919,
-    "maps_url": "https://maps.google.com/?q=104+S+PARK+LN%2C+BUTLER"
-  },
-  {
-    "address": "414 WESTWARD DR",
-    "city": "BUTLER",
-    "county": "DeKalb County",
-    "township": "Butler Township",
-    "lat": 41.433419888136,
-    "lng": -84.875467096083,
-    "maps_url": "https://maps.google.com/?q=414+WESTWARD+DR%2C+BUTLER"
   },
   {
     "address": "1862 RESTORATION DR SW",
@@ -936,15 +902,6 @@ const ADDRESSES = [
     "maps_url": "https://maps.google.com/?q=1895+IN-9%2C+COLUMBIA+CITY"
   },
   {
-    "address": "551 E SPEAR RD",
-    "city": "COLUMBIA CITY",
-    "county": "Whitley County",
-    "township": "Columbia City",
-    "lat": 41.256391239897,
-    "lng": -85.481122537649,
-    "maps_url": "https://maps.google.com/?q=551+E+SPEAR+RD%2C+COLUMBIA+CITY"
-  },
-  {
     "address": "4170 IN-109",
     "city": "COLUMBIA CITY",
     "county": "Whitley County",
@@ -961,15 +918,6 @@ const ADDRESSES = [
     "lat": 41.234349442965,
     "lng": -85.462633349336,
     "maps_url": "https://maps.google.com/?q=4863+IN-9%2C+COLUMBIA+CITY"
-  },
-  {
-    "address": "5684 E Smith St",
-    "city": "COLUMBIA CITY",
-    "county": "Whitley County",
-    "township": "Columbia City",
-    "lat": 41.197232308312,
-    "lng": -85.383085636564,
-    "maps_url": "https://maps.google.com/?q=5684+E+Smith+St%2C+COLUMBIA+CITY"
   },
   {
     "address": "124 W VAN BUREN ST",
@@ -999,15 +947,6 @@ const ADDRESSES = [
     "maps_url": "https://maps.google.com/?q=3485+E+SHERMAN+ST%2C+COLUMBIA+CITY"
   },
   {
-    "address": "11 JEFFREY DR",
-    "city": "COLUMBIA CITY",
-    "county": "Whitley County",
-    "township": "Columbia City",
-    "lat": 41.16491541972,
-    "lng": -85.483986659022,
-    "maps_url": "https://maps.google.com/?q=11+JEFFREY+DR%2C+COLUMBIA+CITY"
-  },
-  {
     "address": "112 S Chauncey ST",
     "city": "COLUMBIA CITY",
     "county": "Whitley County",
@@ -1015,24 +954,6 @@ const ADDRESSES = [
     "lat": 41.156841654481,
     "lng": -85.489888363507,
     "maps_url": "https://maps.google.com/?q=112+S+Chauncey+ST%2C+COLUMBIA+CITY"
-  },
-  {
-    "address": "1734 E BROOKSIDE TRL",
-    "city": "COLUMBIA CITY",
-    "county": "Whitley County",
-    "township": "Columbia City",
-    "lat": 41.159692414462,
-    "lng": -85.45785324776,
-    "maps_url": "https://maps.google.com/?q=1734+E+BROOKSIDE+TRL%2C+COLUMBIA+CITY"
-  },
-  {
-    "address": "276 S PUMPKIN RIDGE CT",
-    "city": "COLUMBIA CITY",
-    "county": "Whitley County",
-    "township": "Columbia City",
-    "lat": 41.156614379294,
-    "lng": -85.447024336167,
-    "maps_url": "https://maps.google.com/?q=276+S+PUMPKIN+RIDGE+CT%2C+COLUMBIA+CITY"
   },
   {
     "address": "3914 IN-109",
@@ -1044,24 +965,6 @@ const ADDRESSES = [
     "maps_url": "https://maps.google.com/?q=3914+IN-109%2C+COLUMBIA+CITY"
   },
   {
-    "address": "500 S 500 E",
-    "city": "COLUMBIA CITY",
-    "county": "Whitley County",
-    "township": "Columbia City",
-    "lat": 41.154485709654,
-    "lng": -85.396656262586,
-    "maps_url": "https://maps.google.com/?q=500+S+500+E%2C+COLUMBIA+CITY"
-  },
-  {
-    "address": "675 S SOMMERSET TRL",
-    "city": "COLUMBIA CITY",
-    "county": "Whitley County",
-    "township": "Columbia City",
-    "lat": 41.150301263363,
-    "lng": -85.463012865717,
-    "maps_url": "https://maps.google.com/?q=675+S+SOMMERSET+TRL%2C+COLUMBIA+CITY"
-  },
-  {
     "address": "3040 E 500 N",
     "city": "COLUMBIA CITY",
     "county": "Whitley County",
@@ -1069,15 +972,6 @@ const ADDRESSES = [
     "lat": 41.236285326978,
     "lng": -85.432997395174,
     "maps_url": "https://maps.google.com/?q=3040+E+500+N%2C+COLUMBIA+CITY"
-  },
-  {
-    "address": "445 S 300 E",
-    "city": "COLUMBIA CITY",
-    "county": "Whitley County",
-    "township": "Columbia City",
-    "lat": 41.155599345984,
-    "lng": -85.434569770815,
-    "maps_url": "https://maps.google.com/?q=445+S+300+E%2C+COLUMBIA+CITY"
   },
   {
     "address": "967 E GATESWORTH DR",
@@ -1224,51 +1118,6 @@ const ADDRESSES = [
     "maps_url": "https://maps.google.com/?q=435+S+300+E%2C+COLUMBIA+CITY"
   },
   {
-    "address": "1121 COUNTY ROAD 13",
-    "city": "CORUNNA",
-    "county": "Shiawassee County",
-    "township": "Corunna Township",
-    "lat": 41.4886218,
-    "lng": -85.1266976,
-    "maps_url": "https://maps.google.com/?q=1121+COUNTY+ROAD+13%2C+CORUNNA"
-  },
-  {
-    "address": "1072 US-6",
-    "city": "CORUNNA",
-    "county": "Shiawassee County",
-    "township": "Corunna Township",
-    "lat": 41.4381453,
-    "lng": -85.1440675,
-    "maps_url": "https://maps.google.com/?q=1072+US-6%2C+CORUNNA"
-  },
-  {
-    "address": "1016 US-6",
-    "city": "CORUNNA",
-    "county": "Shiawassee County",
-    "township": "Corunna Township",
-    "lat": 41.4380544,
-    "lng": -85.14677689999999,
-    "maps_url": "https://maps.google.com/?q=1016+US-6%2C+CORUNNA"
-  },
-  {
-    "address": "106 N BRIDGE ST",
-    "city": "CORUNNA",
-    "county": "Shiawassee County",
-    "township": "Corunna Township",
-    "lat": 42.9985593,
-    "lng": -84.1187118,
-    "maps_url": "https://maps.google.com/?q=106+N+BRIDGE+ST%2C+CORUNNA"
-  },
-  {
-    "address": "1030 COUNTY ROAD 20",
-    "city": "CORUNNA",
-    "county": "Shiawassee County",
-    "township": "Corunna Township",
-    "lat": 41.45241439999999,
-    "lng": -85.1456346,
-    "maps_url": "https://maps.google.com/?q=1030+COUNTY+ROAD+20%2C+CORUNNA"
-  },
-  {
     "address": "126 MICHIGAN AVE",
     "city": "CORUNNA",
     "county": "Shiawassee County",
@@ -1404,60 +1253,6 @@ const ADDRESSES = [
     "maps_url": "https://maps.google.com/?q=22150+COUNTY+ROAD+10%2C+ELKHART"
   },
   {
-    "address": "28119 LA RUE ST",
-    "city": "ELKHART",
-    "county": "Elkhart County",
-    "township": "Elkhart Township",
-    "lat": 41.670560781748,
-    "lng": -86.005297654272,
-    "maps_url": "https://maps.google.com/?q=28119+LA+RUE+ST%2C+ELKHART"
-  },
-  {
-    "address": "23232 REBECCA DR",
-    "city": "ELKHART",
-    "county": "Elkhart County",
-    "township": "Elkhart Township",
-    "lat": 41.622045158014,
-    "lng": -85.910897582008,
-    "maps_url": "https://maps.google.com/?q=23232+REBECCA+DR%2C+ELKHART"
-  },
-  {
-    "address": "56681 ELM RIDGE RD",
-    "city": "ELKHART",
-    "county": "Elkhart County",
-    "township": "Elkhart Township",
-    "lat": 41.671233355952,
-    "lng": -86.009220701231,
-    "maps_url": "https://maps.google.com/?q=56681+ELM+RIDGE+RD%2C+ELKHART"
-  },
-  {
-    "address": "56903 PEARL ANN DR",
-    "city": "ELKHART",
-    "county": "Elkhart County",
-    "township": "Elkhart Township",
-    "lat": 41.668734282506,
-    "lng": -85.927584023778,
-    "maps_url": "https://maps.google.com/?q=56903+PEARL+ANN+DR%2C+ELKHART"
-  },
-  {
-    "address": "23546 HOLLY DR",
-    "city": "ELKHART",
-    "county": "Elkhart County",
-    "township": "Elkhart Township",
-    "lat": 41.699084441951,
-    "lng": -85.918096819584,
-    "maps_url": "https://maps.google.com/?q=23546+HOLLY+DR%2C+ELKHART"
-  },
-  {
-    "address": "56953 COPPERGATE DR",
-    "city": "ELKHART",
-    "county": "Elkhart County",
-    "township": "Elkhart Township",
-    "lat": 41.667579551815,
-    "lng": -85.932077257401,
-    "maps_url": "https://maps.google.com/?q=56953+COPPERGATE+DR%2C+ELKHART"
-  },
-  {
     "address": "1414 GLENWOOD PARK DR",
     "city": "ELKHART",
     "county": "Elkhart County",
@@ -1494,24 +1289,6 @@ const ADDRESSES = [
     "maps_url": "https://maps.google.com/?q=1612+E+BEARDSLEY+AVE%2C+ELKHART"
   },
   {
-    "address": "22989 LARKSPUR CT",
-    "city": "ELKHART",
-    "county": "Elkhart County",
-    "township": "Elkhart Township",
-    "lat": 41.710559857964,
-    "lng": -85.907205062541,
-    "maps_url": "https://maps.google.com/?q=22989+LARKSPUR+CT%2C+ELKHART"
-  },
-  {
-    "address": "23457 GREENLEAF BLVD",
-    "city": "ELKHART",
-    "county": "Elkhart County",
-    "township": "Elkhart Township",
-    "lat": 41.698230661688,
-    "lng": -85.916297655616,
-    "maps_url": "https://maps.google.com/?q=23457+GREENLEAF+BLVD%2C+ELKHART"
-  },
-  {
     "address": "23464 County Road 26",
     "city": "ELKHART",
     "county": "Elkhart County",
@@ -1519,15 +1296,6 @@ const ADDRESSES = [
     "lat": 41.623260801972,
     "lng": -85.915802451848,
     "maps_url": "https://maps.google.com/?q=23464+County+Road+26%2C+ELKHART"
-  },
-  {
-    "address": "28189 OTIS AVE",
-    "city": "ELKHART",
-    "county": "Elkhart County",
-    "township": "Elkhart Township",
-    "lat": 41.655668381772,
-    "lng": -86.006563573784,
-    "maps_url": "https://maps.google.com/?q=28189+OTIS+AVE%2C+ELKHART"
   },
   {
     "address": "28353 LA RUE ST",
@@ -1555,33 +1323,6 @@ const ADDRESSES = [
     "lat": 41.670580987158,
     "lng": -86.04208611882,
     "maps_url": "https://maps.google.com/?q=30090+BLAINE+AVE%2C+ELKHART"
-  },
-  {
-    "address": "57559 CHARLIE DR",
-    "city": "ELKHART",
-    "county": "Elkhart County",
-    "township": "Elkhart Township",
-    "lat": 41.659050267869,
-    "lng": -86.047489381025,
-    "maps_url": "https://maps.google.com/?q=57559+CHARLIE+DR%2C+ELKHART"
-  },
-  {
-    "address": "57883 18TH ST",
-    "city": "ELKHART",
-    "county": "Elkhart County",
-    "township": "Elkhart Township",
-    "lat": 41.654134466003,
-    "lng": -85.995579940085,
-    "maps_url": "https://maps.google.com/?q=57883+18TH+ST%2C+ELKHART"
-  },
-  {
-    "address": "58200 KREIGHBAUM ST",
-    "city": "ELKHART",
-    "county": "Elkhart County",
-    "township": "Elkhart Township",
-    "lat": 41.64988269829,
-    "lng": -86.004170773943,
-    "maps_url": "https://maps.google.com/?q=58200+KREIGHBAUM+ST%2C+ELKHART"
   },
   {
     "address": "59642 LEE AVE",
@@ -2689,15 +2430,6 @@ const ADDRESSES = [
     "lat": 41.518199499057,
     "lng": -85.135593881567,
     "maps_url": "https://maps.google.com/?q=337+COUNTY+ROAD+11%2C+HUDSON"
-  },
-  {
-    "address": "424 1ST ST",
-    "city": "HUDSON",
-    "county": "",
-    "township": "",
-    "lat": 41.533318625285,
-    "lng": -85.082338414627,
-    "maps_url": "https://maps.google.com/?q=424+1ST+ST%2C+HUDSON"
   },
   {
     "address": "2 AMPHLETT TER",
@@ -4149,15 +3881,6 @@ const ADDRESSES = [
     "maps_url": "https://maps.google.com/?q=33+E+Warren+St%2C+PERU"
   },
   {
-    "address": "125 HAY AVE",
-    "city": "PERU",
-    "county": "Miami County",
-    "township": "Peru Township",
-    "lat": 40.766063035365,
-    "lng": -86.073998421174,
-    "maps_url": "https://maps.google.com/?q=125+HAY+AVE%2C+PERU"
-  },
-  {
     "address": "373 E 5TH ST",
     "city": "PERU",
     "county": "Miami County",
@@ -5319,42 +5042,6 @@ const ADDRESSES = [
     "maps_url": "https://maps.google.com/?q=1905+BAYVIEW+LN%2C+WARSAW"
   },
   {
-    "address": "2015 OAKWOOD DR",
-    "city": "WARSAW",
-    "county": "Kosciusko County",
-    "township": "Wayne Township",
-    "lat": 41.245104737569,
-    "lng": -85.888776624529,
-    "maps_url": "https://maps.google.com/?q=2015+OAKWOOD+DR%2C+WARSAW"
-  },
-  {
-    "address": "2156 LINDENWOOD AVE",
-    "city": "WARSAW",
-    "county": "Kosciusko County",
-    "township": "Wayne Township",
-    "lat": 41.210216934881,
-    "lng": -85.862200291531,
-    "maps_url": "https://maps.google.com/?q=2156+LINDENWOOD+AVE%2C+WARSAW"
-  },
-  {
-    "address": "601 N WEST ST",
-    "city": "WARSAW",
-    "county": "Kosciusko County",
-    "township": "Wayne Township",
-    "lat": 41.243007615239,
-    "lng": -85.863429137469,
-    "maps_url": "https://maps.google.com/?q=601+N+WEST+ST%2C+WARSAW"
-  },
-  {
-    "address": "805 E FORT WAYNE ST",
-    "city": "WARSAW",
-    "county": "Kosciusko County",
-    "township": "Wayne Township",
-    "lat": 41.240092457424,
-    "lng": -85.846349282126,
-    "maps_url": "https://maps.google.com/?q=805+E+FORT+WAYNE+ST%2C+WARSAW"
-  },
-  {
     "address": "111 WOODLAWN DR",
     "city": "WARSAW",
     "county": "Kosciusko County",
@@ -5364,15 +5051,6 @@ const ADDRESSES = [
     "maps_url": "https://maps.google.com/?q=111+WOODLAWN+DR%2C+WARSAW"
   },
   {
-    "address": "1806 ROSEMONT AVE",
-    "city": "WARSAW",
-    "county": "Kosciusko County",
-    "township": "Wayne Township",
-    "lat": 41.243239095539,
-    "lng": -85.883713063264,
-    "maps_url": "https://maps.google.com/?q=1806+ROSEMONT+AVE%2C+WARSAW"
-  },
-  {
     "address": "1310 E ISLAND VIEW DR",
     "city": "WARSAW",
     "county": "Kosciusko County",
@@ -5380,24 +5058,6 @@ const ADDRESSES = [
     "lat": 41.22284628514,
     "lng": -85.84067626487,
     "maps_url": "https://maps.google.com/?q=1310+E+ISLAND+VIEW+DR%2C+WARSAW"
-  },
-  {
-    "address": "1994 DAUSHA CT",
-    "city": "WARSAW",
-    "county": "Kosciusko County",
-    "township": "Wayne Township",
-    "lat": 41.213386263287,
-    "lng": -85.855711812271,
-    "maps_url": "https://maps.google.com/?q=1994+DAUSHA+CT%2C+WARSAW"
-  },
-  {
-    "address": "433 S COLUMBIA ST",
-    "city": "WARSAW",
-    "county": "Kosciusko County",
-    "township": "Wayne Township",
-    "lat": 41.234238069405,
-    "lng": -85.860518113809,
-    "maps_url": "https://maps.google.com/?q=433+S+COLUMBIA+ST%2C+WARSAW"
   },
   {
     "address": "617 S BUFFALO ST",
@@ -5434,15 +5094,6 @@ const ADDRESSES = [
     "lat": 41.229287418237,
     "lng": -85.840273391746,
     "maps_url": "https://maps.google.com/?q=22+FAIRLANE+DR%2C+WARSAW"
-  },
-  {
-    "address": "2006 Co RD 10",
-    "city": "WATERLOO",
-    "county": "",
-    "township": "",
-    "lat": 41.489748448605,
-    "lng": -85.099092936129,
-    "maps_url": "https://maps.google.com/?q=2006+Co+RD+10%2C+WATERLOO"
   },
   {
     "address": "735 E MARION ST",
@@ -5896,9 +5547,11 @@ function buildPopup(i) {
 // ════════════════════════════════════════════════════════════════════════════
 //  STATE
 // ════════════════════════════════════════════════════════════════════════════
-let selectedIdx = null;
-let hoverLines  = [];
-let clickLines  = [];
+let selectedIdx    = null;
+let hoverLines     = [];
+let clickLines     = [];
+let proximityMode  = 'count';   // 'count' | 'distance'
+let distRadius     = 10;        // miles (distance mode only)
 
 // ════════════════════════════════════════════════════════════════════════════
 //  SELECTION  &  PROXIMITY COLORING
@@ -5919,17 +5572,64 @@ function selectNode(i) {
 
 function applyProximityColors(centerIdx) {
   const center = ADDRESSES[centerIdx];
-  const ranked = ADDRESSES
-    .map((a, i) => ({ i, dist: haversine(center, a) }))
-    .sort((a, b) => a.dist - b.dist);
-  ranked.forEach(({ i }, rank) => {
-    if (i === centerIdx) return;
-    let color;
-    if (rank <= 5)       color = C.close;
-    else if (rank <= 15) color = C.medium;
-    else                 color = C.far;
-    markers[i].setStyle(markerOpts(color, false));
-  });
+  if (proximityMode === 'count') {
+    const ranked = ADDRESSES
+      .map((a, i) => ({ i, dist: haversine(center, a) }))
+      .sort((a, b) => a.dist - b.dist);
+    ranked.forEach(({ i }, rank) => {
+      if (i === centerIdx) return;
+      let color;
+      if (rank <= 5)       color = C.close;
+      else if (rank <= 15) color = C.medium;
+      else                 color = C.far;
+      markers[i].setStyle(markerOpts(color, false));
+    });
+  } else {
+    const closeKm  = distRadius * 1.60934;
+    const mediumKm = closeKm * 2;
+    ADDRESSES.forEach((a, i) => {
+      if (i === centerIdx) return;
+      const km = haversine(center, a);
+      let color;
+      if      (km <= closeKm)  color = C.close;
+      else if (km <= mediumKm) color = C.medium;
+      else                     color = C.far;
+      markers[i].setStyle(markerOpts(color, false));
+    });
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  MODE / DISTANCE CONTROLS
+// ════════════════════════════════════════════════════════════════════════════
+function setMode(mode) {
+  proximityMode = mode;
+  document.getElementById('mode-count').classList.toggle('active', mode === 'count');
+  document.getElementById('mode-dist').classList.toggle('active',  mode === 'distance');
+  document.getElementById('dist-presets').style.display = mode === 'distance' ? 'block' : 'none';
+  _updateLegendLabels();
+  if (selectedIdx !== null) applyProximityColors(selectedIdx);
+}
+
+function setRadius(miles, btn) {
+  distRadius = miles;
+  document.querySelectorAll('.dist-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _updateLegendLabels();
+  if (selectedIdx !== null) applyProximityColors(selectedIdx);
+}
+
+function _updateLegendLabels() {
+  if (proximityMode === 'count') {
+    document.getElementById('leg-close').textContent  = '5 closest';
+    document.getElementById('leg-medium').textContent = 'Next 10 (6–15)';
+    document.getElementById('leg-far').textContent    = 'Farther (16+)';
+  } else {
+    const r = distRadius;
+    document.getElementById('leg-close').textContent  = `Within ${r} mi`;
+    document.getElementById('leg-medium').textContent = `${r}–${r * 2} mi`;
+    document.getElementById('leg-far').textContent    = `Beyond ${r * 2} mi`;
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
