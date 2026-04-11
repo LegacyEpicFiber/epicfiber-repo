@@ -22,8 +22,7 @@
     white-space: nowrap;
   }
   #hud .title { font-weight: 700; color: #cbd5e1; letter-spacing: 0.02em; }
-  #hud .count { color: #475569; font-size: 12px; }
-  #hud .selected-info { color: #60a5fa; font-size: 12px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+  #hud .selected-info { color: #60a5fa; font-size: 12px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
   #reset-btn {
     background: #1e293b; border: 1px solid #475569; color: #94a3b8;
     padding: 4px 12px; border-radius: 5px; cursor: pointer; font-size: 12px;
@@ -31,6 +30,33 @@
   }
   #reset-btn:hover { background: #334155; color: #e2e8f0; border-color: #64748b; }
   #reset-btn:active { background: #475569; }
+
+  /* ── SEARCH ── */
+  #search-wrap { position: relative; display: flex; align-items: center; }
+  #search-input {
+    background: #1e293b; border: 1px solid #334155; border-radius: 7px;
+    color: #e2e8f0; font-size: 12px; padding: 5px 26px 5px 10px;
+    outline: none; width: 210px; transition: border-color 0.15s, width 0.2s;
+  }
+  #search-input:focus { border-color: #2563eb; width: 270px; }
+  #search-input::placeholder { color: #475569; }
+  #search-clear {
+    position: absolute; right: 6px; background: none; border: none;
+    color: #475569; cursor: pointer; font-size: 12px; padding: 2px; display: none;
+  }
+  #search-clear:hover { color: #94a3b8; }
+  #search-results {
+    position: absolute; top: calc(100% + 6px); left: 0;
+    background: #1e293b; border: 1px solid #334155; border-radius: 8px;
+    list-style: none; min-width: 270px; max-height: 230px; overflow-y: auto;
+    z-index: 2000; box-shadow: 0 8px 24px rgba(0,0,0,0.55); display: none;
+  }
+  #search-results li { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #0f1117; }
+  #search-results li:last-child { border-bottom: none; }
+  #search-results li:hover, #search-results li.sr-active { background: #273447; }
+  #search-results .sr-addr { color: #f1f5f9; font-weight: 600; font-size: 12px; }
+  #search-results .sr-city { color: #64748b; font-size: 11px; }
+  #search-results .sr-none { color: #475569; text-align: center; padding: 12px; cursor: default; font-size: 12px; }
 
   /* ── LEGEND ── */
   #legend {
@@ -66,6 +92,52 @@
     padding: 10px 14px; z-index: 1000; font-size: 11px; color: #475569;
     line-height: 1.6;
   }
+
+  /* ── DISTANCE PANEL ── */
+  #dist-panel {
+    position: fixed; top: 12px; right: 16px;
+    background: rgba(15,17,23,0.88); backdrop-filter: blur(6px);
+    border: 1px solid #334155; border-radius: 10px;
+    padding: 11px 14px; z-index: 1000; font-size: 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    min-width: 200px;
+  }
+  #dist-panel .dp-title { color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
+  .dp-label { color: #475569; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; margin-top: 7px; }
+  .dp-label:first-of-type { margin-top: 0; }
+  .dp-sw { position: relative; }
+  .dp-sw input {
+    background: #1e293b; border: 1px solid #334155; border-radius: 6px;
+    color: #e2e8f0; font-size: 11px; padding: 5px 22px 5px 8px;
+    outline: none; width: 100%; transition: border-color 0.15s;
+  }
+  .dp-sw input:focus { border-color: #2563eb; }
+  .dp-sw input::placeholder { color: #475569; }
+  .dp-sw-clear {
+    position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; color: #475569; cursor: pointer;
+    font-size: 11px; padding: 1px; display: none;
+  }
+  .dp-sw-clear:hover { color: #94a3b8; }
+  .dp-sw-results {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: #1e293b; border: 1px solid #334155; border-radius: 7px;
+    list-style: none; max-height: 170px; overflow-y: auto;
+    z-index: 2001; box-shadow: 0 6px 18px rgba(0,0,0,0.5); display: none;
+  }
+  .dp-sw-results li { padding: 6px 10px; cursor: pointer; border-bottom: 1px solid #0f1117; font-size: 11px; }
+  .dp-sw-results li:last-child { border-bottom: none; }
+  .dp-sw-results li:hover, .dp-sw-results li.dp-active { background: #273447; }
+  .dp-sw-results .dp-ra { color: #f1f5f9; font-weight: 600; }
+  .dp-sw-results .dp-rc { color: #64748b; font-size: 10px; }
+  .dp-sw-results .dp-rn { color: #475569; text-align: center; padding: 10px; cursor: default; }
+  #dist-result {
+    margin-top: 10px; padding: 8px 10px;
+    background: #0f1117; border-radius: 7px; border: 1px solid #1e293b;
+    text-align: center; display: none;
+  }
+  #dist-result .dr-mi { color: #f59e0b; font-size: 17px; font-weight: 700; }
+  #dist-result .dr-km { color: #475569; font-size: 11px; margin-top: 2px; }
 
   /* ── HOVER TOOLTIP ── */
   .leaflet-tooltip.addr-tip {
@@ -137,7 +209,11 @@
 <!-- HUD -->
 <div id="hud">
   <span class="title">BURY / DWB</span>
-  <span class="count" id="count-label"></span>
+  <div id="search-wrap">
+    <input id="search-input" type="text" placeholder="🔍  Search address or city…" autocomplete="off" spellcheck="false">
+    <button id="search-clear" title="Clear">✕</button>
+    <ul id="search-results"></ul>
+  </div>
   <span class="selected-info" id="selected-label"></span>
   <button id="reset-btn" onclick="resetAll()" style="display:none">✕ Reset</button>
 </div>
@@ -169,9 +245,31 @@
 
 <!-- Instructions -->
 <div id="instructions">
+  <div id="count-label" style="color:#64748b; font-size:11px; margin-bottom:7px; font-weight:600;"></div>
   <strong style="color:#64748b">Hover</strong> → address + nearest 5 lines<br>
   <strong style="color:#64748b">Click</strong> any dot → proximity view<br>
   <strong style="color:#64748b">Click again</strong> → deselect
+</div>
+
+<!-- Distance Panel -->
+<div id="dist-panel">
+  <div class="dp-title">📏 Distance</div>
+  <div class="dp-label">From</div>
+  <div class="dp-sw">
+    <input id="dp-input-a" type="text" placeholder="Search address or city…" autocomplete="off" spellcheck="false">
+    <button class="dp-sw-clear" id="dp-clear-a">✕</button>
+    <ul class="dp-sw-results" id="dp-results-a"></ul>
+  </div>
+  <div class="dp-label">To</div>
+  <div class="dp-sw">
+    <input id="dp-input-b" type="text" placeholder="Search address or city…" autocomplete="off" spellcheck="false">
+    <button class="dp-sw-clear" id="dp-clear-b">✕</button>
+    <ul class="dp-sw-results" id="dp-results-b"></ul>
+  </div>
+  <div id="dist-result">
+    <div class="dr-mi" id="dr-mi"></div>
+    <div class="dr-km" id="dr-km"></div>
+  </div>
 </div>
 
 <!-- Map -->
@@ -2645,8 +2743,8 @@ const ADDRESSES = [
   {
     "address": "6468 PARIS AVE SE",
     "city": "GRAND RAPIDS",
-    "county": "",
-    "township": "",
+    "county": "LaMoure County",
+    "township": "Lamoure City",
     "lat": 42.846768937004,
     "lng": -85.650308594653,
     "maps_url": "https://maps.google.com/?q=6468+PARIS+AVE+SE%2C+GRAND+RAPIDS",
@@ -2895,8 +2993,8 @@ const ADDRESSES = [
   {
     "address": "2821 S SANDSTONE RD",
     "city": "JACKSON",
-    "county": "",
-    "township": "",
+    "county": "Carroll County",
+    "township": "Jackson Town",
     "lat": 42.22545673435,
     "lng": -84.516671292797,
     "maps_url": "https://maps.google.com/?q=2821+S+SANDSTONE+RD%2C+JACKSON",
@@ -2905,8 +3003,8 @@ const ADDRESSES = [
   {
     "address": "5764 HIGHLAND BELL DR",
     "city": "JACKSON",
-    "county": "",
-    "township": "",
+    "county": "Carroll County",
+    "township": "Jackson Town",
     "lat": 42.219634215417,
     "lng": -84.517690892985,
     "maps_url": "https://maps.google.com/?q=5764+HIGHLAND+BELL+DR%2C+JACKSON",
@@ -2915,8 +3013,8 @@ const ADDRESSES = [
   {
     "address": "2922 S SANDSTONE RD",
     "city": "JACKSON",
-    "county": "",
-    "township": "",
+    "county": "Carroll County",
+    "township": "Jackson Town",
     "lat": 42.22176880424,
     "lng": -84.516726211083,
     "maps_url": "https://maps.google.com/?q=2922+S+SANDSTONE+RD%2C+JACKSON",
@@ -2925,8 +3023,8 @@ const ADDRESSES = [
   {
     "address": "6688 SPRING ARBOR RD",
     "city": "JACKSON",
-    "county": "",
-    "township": "",
+    "county": "Carroll County",
+    "township": "Jackson Town",
     "lat": 42.216579441468,
     "lng": -84.516337112865,
     "maps_url": "https://maps.google.com/?q=6688+SPRING+ARBOR+RD%2C+JACKSON",
@@ -3755,8 +3853,8 @@ const ADDRESSES = [
   {
     "address": "1661 S 14th ST",
     "city": "NILES",
-    "county": "",
-    "township": "",
+    "county": "Trumbull County",
+    "township": "Weathersfield Township",
     "lat": 41.803701410448,
     "lng": -86.242984615285,
     "maps_url": "https://maps.google.com/?q=1661+S+14th+ST%2C+NILES",
@@ -3765,8 +3863,8 @@ const ADDRESSES = [
   {
     "address": "1067 Bame Ave",
     "city": "NILES",
-    "county": "",
-    "township": "",
+    "county": "Trumbull County",
+    "township": "Weathersfield Township",
     "lat": 41.830852370702,
     "lng": -86.199018277259,
     "maps_url": "https://maps.google.com/?q=1067+Bame+Ave%2C+NILES",
@@ -3775,8 +3873,8 @@ const ADDRESSES = [
   {
     "address": "1500 FERNDALE BLVD",
     "city": "NILES",
-    "county": "",
-    "township": "",
+    "county": "Trumbull County",
+    "township": "Weathersfield Township",
     "lat": 41.808376448302,
     "lng": -86.245632871845,
     "maps_url": "https://maps.google.com/?q=1500+FERNDALE+BLVD%2C+NILES",
@@ -3785,8 +3883,8 @@ const ADDRESSES = [
   {
     "address": "1417 OAKDALE AVE",
     "city": "NILES",
-    "county": "",
-    "township": "",
+    "county": "Trumbull County",
+    "township": "Weathersfield Township",
     "lat": 41.801977868271,
     "lng": -86.242502322597,
     "maps_url": "https://maps.google.com/?q=1417+OAKDALE+AVE%2C+NILES",
@@ -3795,8 +3893,8 @@ const ADDRESSES = [
   {
     "address": "2531 LAKE SHORE DR",
     "city": "NILES",
-    "county": "",
-    "township": "",
+    "county": "Trumbull County",
+    "township": "Weathersfield Township",
     "lat": 41.835757940709,
     "lng": -86.19230622632,
     "maps_url": "https://maps.google.com/?q=2531+LAKE+SHORE+DR%2C+NILES",
@@ -3805,8 +3903,8 @@ const ADDRESSES = [
   {
     "address": "709 S LINDA LN",
     "city": "NORTH WEBSTER",
-    "county": "",
-    "township": "",
+    "county": "Kosciusko County",
+    "township": "Wayne Township",
     "lat": 41.320060322683,
     "lng": -85.698635960058,
     "maps_url": "https://maps.google.com/?q=709+S+LINDA+LN%2C+NORTH+WEBSTER",
@@ -3995,8 +4093,8 @@ const ADDRESSES = [
   {
     "address": "434 WATER ST",
     "city": "OTSEGO",
-    "county": "",
-    "township": "",
+    "county": "Sherburne County",
+    "township": "Elk River City",
     "lat": 42.462048948987,
     "lng": -85.703261375392,
     "maps_url": "https://maps.google.com/?q=434+WATER+ST%2C+OTSEGO",
@@ -4005,8 +4103,8 @@ const ADDRESSES = [
   {
     "address": "200 SHERWOOD ST",
     "city": "OTSEGO",
-    "county": "",
-    "township": "",
+    "county": "Sherburne County",
+    "township": "Elk River City",
     "lat": 42.459873344256,
     "lng": -85.708444516592,
     "maps_url": "https://maps.google.com/?q=200+SHERWOOD+ST%2C+OTSEGO",
@@ -4015,8 +4113,8 @@ const ADDRESSES = [
   {
     "address": "318 W MORRELL ST",
     "city": "OTSEGO",
-    "county": "",
-    "township": "",
+    "county": "Sherburne County",
+    "township": "Elk River City",
     "lat": 42.457878702889,
     "lng": -85.70258598552,
     "maps_url": "https://maps.google.com/?q=318+W+MORRELL+ST%2C+OTSEGO",
@@ -4025,8 +4123,8 @@ const ADDRESSES = [
   {
     "address": "334 WATER ST",
     "city": "OTSEGO",
-    "county": "",
-    "township": "",
+    "county": "Sherburne County",
+    "township": "Elk River City",
     "lat": 42.462017392668,
     "lng": -85.702274525029,
     "maps_url": "https://maps.google.com/?q=334+WATER+ST%2C+OTSEGO",
@@ -4035,8 +4133,8 @@ const ADDRESSES = [
   {
     "address": "357 W HAMMOND ST",
     "city": "OTSEGO",
-    "county": "",
-    "township": "",
+    "county": "Sherburne County",
+    "township": "Elk River City",
     "lat": 42.456668236881,
     "lng": -85.703998196282,
     "maps_url": "https://maps.google.com/?q=357+W+HAMMOND+ST%2C+OTSEGO",
@@ -4045,8 +4143,8 @@ const ADDRESSES = [
   {
     "address": "522 MURIEL ST",
     "city": "OTSEGO",
-    "county": "",
-    "township": "",
+    "county": "Sherburne County",
+    "township": "Elk River City",
     "lat": 42.458454242611,
     "lng": -85.708856391165,
     "maps_url": "https://maps.google.com/?q=522+MURIEL+ST%2C+OTSEGO",
@@ -4055,8 +4153,8 @@ const ADDRESSES = [
   {
     "address": "522 MURIEL ST",
     "city": "OTSEGO",
-    "county": "",
-    "township": "",
+    "county": "Sherburne County",
+    "township": "Elk River City",
     "lat": 42.458454242611,
     "lng": -85.708856391165,
     "maps_url": "https://maps.google.com/?q=522+MURIEL+ST%2C+OTSEGO",
@@ -4065,8 +4163,8 @@ const ADDRESSES = [
   {
     "address": "216 E Allegan ST",
     "city": "OTSEGO",
-    "county": "",
-    "township": "",
+    "county": "Sherburne County",
+    "township": "Elk River City",
     "lat": 42.460083352685,
     "lng": -85.69491610819,
     "maps_url": "https://maps.google.com/?q=216+E+Allegan+ST%2C+OTSEGO",
@@ -4075,8 +4173,8 @@ const ADDRESSES = [
   {
     "address": "226 E ALLEGAN ST",
     "city": "OTSEGO",
-    "county": "",
-    "township": "",
+    "county": "Sherburne County",
+    "township": "Elk River City",
     "lat": 42.460031324435,
     "lng": -85.694657267751,
     "maps_url": "https://maps.google.com/?q=226+E+ALLEGAN+ST%2C+OTSEGO",
@@ -4085,8 +4183,8 @@ const ADDRESSES = [
   {
     "address": "211 S FAIR ST",
     "city": "OTSEGO",
-    "county": "",
-    "township": "",
+    "county": "Sherburne County",
+    "township": "Elk River City",
     "lat": 42.459012390644,
     "lng": -85.695743178346,
     "maps_url": "https://maps.google.com/?q=211+S+FAIR+ST%2C+OTSEGO",
@@ -4095,8 +4193,8 @@ const ADDRESSES = [
   {
     "address": "319 W HAMMOND ST",
     "city": "OTSEGO",
-    "county": "",
-    "township": "",
+    "county": "Sherburne County",
+    "township": "Elk River City",
     "lat": 42.456651495437,
     "lng": -85.702573506125,
     "maps_url": "https://maps.google.com/?q=319+W+HAMMOND+ST%2C+OTSEGO",
@@ -4105,8 +4203,8 @@ const ADDRESSES = [
   {
     "address": "317 S FAIR ST",
     "city": "OTSEGO",
-    "county": "",
-    "township": "",
+    "county": "Sherburne County",
+    "township": "Elk River City",
     "lat": 42.457848018443,
     "lng": -85.696160427865,
     "maps_url": "https://maps.google.com/?q=317+S+FAIR+ST%2C+OTSEGO",
@@ -4115,8 +4213,8 @@ const ADDRESSES = [
   {
     "address": "362 GARFIELD ST",
     "city": "OTSEGO",
-    "county": "",
-    "township": "",
+    "county": "Sherburne County",
+    "township": "Elk River City",
     "lat": 42.455379163484,
     "lng": -85.704275405516,
     "maps_url": "https://maps.google.com/?q=362+GARFIELD+ST%2C+OTSEGO",
@@ -4125,8 +4223,8 @@ const ADDRESSES = [
   {
     "address": "378 W ORLEANS ST",
     "city": "OTSEGO",
-    "county": "",
-    "township": "",
+    "county": "Sherburne County",
+    "township": "Elk River City",
     "lat": 42.460218446478,
     "lng": -85.704441508832,
     "maps_url": "https://maps.google.com/?q=378+W+ORLEANS+ST%2C+OTSEGO",
@@ -4135,8 +4233,8 @@ const ADDRESSES = [
   {
     "address": "303 W ORLEANS ST",
     "city": "OTSEGO",
-    "county": "",
-    "township": "",
+    "county": "Sherburne County",
+    "township": "Elk River City",
     "lat": 42.460115944677,
     "lng": -85.701992820162,
     "maps_url": "https://maps.google.com/?q=303+W+ORLEANS+ST%2C+OTSEGO",
@@ -4145,8 +4243,8 @@ const ADDRESSES = [
   {
     "address": "307 W ORLEANS ST",
     "city": "OTSEGO",
-    "county": "",
-    "township": "",
+    "county": "Sherburne County",
+    "township": "Elk River City",
     "lat": 42.460115308517,
     "lng": -85.702121643793,
     "maps_url": "https://maps.google.com/?q=307+W+ORLEANS+ST%2C+OTSEGO",
@@ -4155,8 +4253,8 @@ const ADDRESSES = [
   {
     "address": "344 W ORLEANS ST",
     "city": "OTSEGO",
-    "county": "",
-    "township": "",
+    "county": "Sherburne County",
+    "township": "Elk River City",
     "lat": 42.460223853832,
     "lng": -85.703346507966,
     "maps_url": "https://maps.google.com/?q=344+W+ORLEANS+ST%2C+OTSEGO",
@@ -4165,8 +4263,8 @@ const ADDRESSES = [
   {
     "address": "720 NICHOLSON ST",
     "city": "OTSEGO",
-    "county": "",
-    "township": "",
+    "county": "Sherburne County",
+    "township": "Elk River City",
     "lat": 42.461727321141,
     "lng": -85.712449766915,
     "maps_url": "https://maps.google.com/?q=720+NICHOLSON+ST%2C+OTSEGO",
@@ -4175,8 +4273,8 @@ const ADDRESSES = [
   {
     "address": "316 MCKINLEY ST",
     "city": "OTSEGO",
-    "county": "",
-    "township": "",
+    "county": "Sherburne County",
+    "township": "Elk River City",
     "lat": 42.454557044225,
     "lng": -85.702746550664,
     "maps_url": "https://maps.google.com/?q=316+MCKINLEY+ST%2C+OTSEGO",
@@ -4185,8 +4283,8 @@ const ADDRESSES = [
   {
     "address": "214 W HAMMOND ST",
     "city": "OTSEGO",
-    "county": "",
-    "township": "",
+    "county": "Sherburne County",
+    "township": "Elk River City",
     "lat": 42.456597053312,
     "lng": -85.700220668487,
     "maps_url": "https://maps.google.com/?q=214+W+HAMMOND+ST%2C+OTSEGO",
@@ -4625,8 +4723,8 @@ const ADDRESSES = [
   {
     "address": "1362 DESMOND ST",
     "city": "SAINT JOSEPH",
-    "county": "",
-    "township": "",
+    "county": "Berrien County",
+    "township": "St. Joseph City",
     "lat": 42.03839708089,
     "lng": -86.486499854305,
     "maps_url": "https://maps.google.com/?q=1362+DESMOND+ST%2C+SAINT+JOSEPH",
@@ -4635,8 +4733,8 @@ const ADDRESSES = [
   {
     "address": "1316 SILVER CREEK PL",
     "city": "SAINT JOSEPH",
-    "county": "",
-    "township": "",
+    "county": "Berrien County",
+    "township": "St. Joseph City",
     "lat": 42.027098071708,
     "lng": -86.485480412695,
     "maps_url": "https://maps.google.com/?q=1316+SILVER+CREEK+PL%2C+SAINT+JOSEPH",
@@ -4645,8 +4743,8 @@ const ADDRESSES = [
   {
     "address": "1393 BRENTWOOD DR",
     "city": "SAINT JOSEPH",
-    "county": "",
-    "township": "",
+    "county": "Berrien County",
+    "township": "St. Joseph City",
     "lat": 42.018641809719,
     "lng": -86.487260542619,
     "maps_url": "https://maps.google.com/?q=1393+BRENTWOOD+DR%2C+SAINT+JOSEPH",
@@ -4655,8 +4753,8 @@ const ADDRESSES = [
   {
     "address": "1375 WOODCREEK TRL",
     "city": "SAINT JOSEPH",
-    "county": "",
-    "township": "",
+    "county": "Berrien County",
+    "township": "St. Joseph City",
     "lat": 42.02772022611,
     "lng": -86.487189329938,
     "maps_url": "https://maps.google.com/?q=1375+WOODCREEK+TRL%2C+SAINT+JOSEPH",
@@ -4665,8 +4763,8 @@ const ADDRESSES = [
   {
     "address": "1348 BUCKHORN DR",
     "city": "SAINT JOSEPH",
-    "county": "",
-    "township": "",
+    "county": "Berrien County",
+    "township": "St. Joseph City",
     "lat": 42.020313763328,
     "lng": -86.485943134483,
     "maps_url": "https://maps.google.com/?q=1348+BUCKHORN+DR%2C+SAINT+JOSEPH",
@@ -4675,8 +4773,8 @@ const ADDRESSES = [
   {
     "address": "1355 MULBERRY LN",
     "city": "SAINT JOSEPH",
-    "county": "",
-    "township": "",
+    "county": "Berrien County",
+    "township": "St. Joseph City",
     "lat": 42.032163830204,
     "lng": -86.486567995976,
     "maps_url": "https://maps.google.com/?q=1355+MULBERRY+LN%2C+SAINT+JOSEPH",
@@ -4685,8 +4783,8 @@ const ADDRESSES = [
   {
     "address": "1281 W MARQUETTE WOODS RD",
     "city": "SAINT JOSEPH",
-    "county": "",
-    "township": "",
+    "county": "Berrien County",
+    "township": "St. Joseph City",
     "lat": 42.02900535316,
     "lng": -86.484772890948,
     "maps_url": "https://maps.google.com/?q=1281+W+MARQUETTE+WOODS+RD%2C+SAINT+JOSEPH",
@@ -4695,8 +4793,8 @@ const ADDRESSES = [
   {
     "address": "5996 David Hwy",
     "city": "SARANAC",
-    "county": "",
-    "township": "",
+    "county": "Ionia County",
+    "township": "Boston Township",
     "lat": 42.929794239019,
     "lng": -85.193496593961,
     "maps_url": "https://maps.google.com/?q=5996+David+Hwy%2C+SARANAC",
@@ -4705,8 +4803,8 @@ const ADDRESSES = [
   {
     "address": "4104 RUNNERS CT",
     "city": "SARANAC",
-    "county": "",
-    "township": "",
+    "county": "Ionia County",
+    "township": "Boston Township",
     "lat": 42.928837158734,
     "lng": -85.187755892178,
     "maps_url": "https://maps.google.com/?q=4104+RUNNERS+CT%2C+SARANAC",
@@ -4715,8 +4813,8 @@ const ADDRESSES = [
   {
     "address": "6220 RIVERSIDE DR",
     "city": "SARANAC",
-    "county": "",
-    "township": "",
+    "county": "Ionia County",
+    "township": "Boston Township",
     "lat": 42.933520473911,
     "lng": -85.197860573835,
     "maps_url": "https://maps.google.com/?q=6220+RIVERSIDE+DR%2C+SARANAC",
@@ -4725,8 +4823,8 @@ const ADDRESSES = [
   {
     "address": "6019 DAVID HWY",
     "city": "SARANAC",
-    "county": "",
-    "township": "",
+    "county": "Ionia County",
+    "township": "Boston Township",
     "lat": 42.929843400087,
     "lng": -85.194247042234,
     "maps_url": "https://maps.google.com/?q=6019+DAVID+HWY%2C+SARANAC",
@@ -4735,8 +4833,8 @@ const ADDRESSES = [
   {
     "address": "6131 DAVID HWY",
     "city": "SARANAC",
-    "county": "",
-    "township": "",
+    "county": "Ionia County",
+    "township": "Boston Township",
     "lat": 42.929815357852,
     "lng": -85.196157426293,
     "maps_url": "https://maps.google.com/?q=6131+DAVID+HWY%2C+SARANAC",
@@ -4745,8 +4843,8 @@ const ADDRESSES = [
   {
     "address": "30 CENTER ST",
     "city": "SARANAC",
-    "county": "",
-    "township": "",
+    "county": "Ionia County",
+    "township": "Boston Township",
     "lat": 42.930445809049,
     "lng": -85.210477554997,
     "maps_url": "https://maps.google.com/?q=30+CENTER+ST%2C+SARANAC",
@@ -4755,8 +4853,8 @@ const ADDRESSES = [
   {
     "address": "35 WASHINGTON ST",
     "city": "SARANAC",
-    "county": "",
-    "township": "",
+    "county": "Ionia County",
+    "township": "Boston Township",
     "lat": 42.926551337822,
     "lng": -85.214067039663,
     "maps_url": "https://maps.google.com/?q=35+WASHINGTON+ST%2C+SARANAC",
@@ -4765,8 +4863,8 @@ const ADDRESSES = [
   {
     "address": "123 S VOSPER ST",
     "city": "SARANAC",
-    "county": "",
-    "township": "",
+    "county": "Ionia County",
+    "township": "Boston Township",
     "lat": 42.927711677243,
     "lng": -85.208401307443,
     "maps_url": "https://maps.google.com/?q=123+S+VOSPER+ST%2C+SARANAC",
@@ -4775,8 +4873,8 @@ const ADDRESSES = [
   {
     "address": "125 CENTER ST",
     "city": "SARANAC",
-    "county": "",
-    "township": "",
+    "county": "Ionia County",
+    "township": "Boston Township",
     "lat": 42.928080798983,
     "lng": -85.210837008606,
     "maps_url": "https://maps.google.com/?q=125+CENTER+ST%2C+SARANAC",
@@ -5325,8 +5423,8 @@ const ADDRESSES = [
   {
     "address": "5517 SIOUX CT",
     "city": "STEVENSVILLE",
-    "county": "",
-    "township": "",
+    "county": "Ravalli County",
+    "township": "Stevensville Ccd",
     "lat": 42.017959021442,
     "lng": -86.506172285873,
     "maps_url": "https://maps.google.com/?q=5517+SIOUX+CT%2C+STEVENSVILLE",
@@ -5335,8 +5433,8 @@ const ADDRESSES = [
   {
     "address": "1615 HICKORY TRACE DR",
     "city": "STEVENSVILLE",
-    "county": "",
-    "township": "",
+    "county": "Ravalli County",
+    "township": "Stevensville Ccd",
     "lat": 42.016891355677,
     "lng": -86.492573573807,
     "maps_url": "https://maps.google.com/?q=1615+HICKORY+TRACE+DR%2C+STEVENSVILLE",
@@ -5345,8 +5443,8 @@ const ADDRESSES = [
   {
     "address": "5502 IVY DR",
     "city": "STEVENSVILLE",
-    "county": "",
-    "township": "",
+    "county": "Ravalli County",
+    "township": "Stevensville Ccd",
     "lat": 42.017622140465,
     "lng": -86.491929717153,
     "maps_url": "https://maps.google.com/?q=5502+IVY+DR%2C+STEVENSVILLE",
@@ -5355,8 +5453,8 @@ const ADDRESSES = [
   {
     "address": "5543 IVY PATH",
     "city": "STEVENSVILLE",
-    "county": "",
-    "township": "",
+    "county": "Ravalli County",
+    "township": "Stevensville Ccd",
     "lat": 42.017220946273,
     "lng": -86.491018738918,
     "maps_url": "https://maps.google.com/?q=5543+IVY+PATH%2C+STEVENSVILLE",
@@ -5465,8 +5563,8 @@ const ADDRESSES = [
   {
     "address": "211 2ND AVE",
     "city": "THREE RIVERS",
-    "county": "",
-    "township": "",
+    "county": "Hampden County",
+    "township": "Palmer Town City",
     "lat": 41.943438324567,
     "lng": -85.627080007509,
     "maps_url": "https://maps.google.com/?q=211+2ND+AVE%2C+THREE+RIVERS",
@@ -5475,8 +5573,8 @@ const ADDRESSES = [
   {
     "address": "314 WEST ST",
     "city": "THREE RIVERS",
-    "county": "",
-    "township": "",
+    "county": "Hampden County",
+    "township": "Palmer Town City",
     "lat": 41.94883449347,
     "lng": -85.6362082375,
     "maps_url": "https://maps.google.com/?q=314+WEST+ST%2C+THREE+RIVERS",
@@ -5485,8 +5583,8 @@ const ADDRESSES = [
   {
     "address": "805 S HOOKER AVE",
     "city": "THREE RIVERS",
-    "county": "",
-    "township": "",
+    "county": "Hampden County",
+    "township": "Palmer Town City",
     "lat": 41.933878932892,
     "lng": -85.638908489692,
     "maps_url": "https://maps.google.com/?q=805+S+HOOKER+AVE%2C+THREE+RIVERS",
@@ -5915,8 +6013,8 @@ const ADDRESSES = [
   {
     "address": "69270 S KALAMAZOO ST",
     "city": "WHITE PIGEON",
-    "county": "",
-    "township": "",
+    "county": "Huron County",
+    "township": "Winsor Township",
     "lat": 41.790766397162,
     "lng": -85.643251842681,
     "maps_url": "https://maps.google.com/?q=69270+S+KALAMAZOO+ST%2C+WHITE+PIGEON",
@@ -5925,8 +6023,8 @@ const ADDRESSES = [
   {
     "address": "101 E VERMONT AVE",
     "city": "WHITE PIGEON",
-    "county": "",
-    "township": "",
+    "county": "Huron County",
+    "township": "Winsor Township",
     "lat": 41.800229454384,
     "lng": -85.64236242525,
     "maps_url": "https://maps.google.com/?q=101+E+VERMONT+AVE%2C+WHITE+PIGEON",
@@ -5935,8 +6033,8 @@ const ADDRESSES = [
   {
     "address": "212 S LINCOLN ST",
     "city": "WHITE PIGEON",
-    "county": "",
-    "township": "",
+    "county": "Huron County",
+    "township": "Winsor Township",
     "lat": 41.796570110605,
     "lng": -85.639615827689,
     "maps_url": "https://maps.google.com/?q=212+S+LINCOLN+ST%2C+WHITE+PIGEON",
@@ -5945,8 +6043,8 @@ const ADDRESSES = [
   {
     "address": "212 S LINCOLN ST",
     "city": "WHITE PIGEON",
-    "county": "",
-    "township": "",
+    "county": "Huron County",
+    "township": "Winsor Township",
     "lat": 41.796570110605,
     "lng": -85.639615827689,
     "maps_url": "https://maps.google.com/?q=212+S+LINCOLN+ST%2C+WHITE+PIGEON",
@@ -6256,6 +6354,79 @@ function resetAll() {
 map.on('click', resetAll);
 
 // ════════════════════════════════════════════════════════════════════════════
+//  SEARCH
+// ════════════════════════════════════════════════════════════════════════════
+const searchInput   = document.getElementById('search-input');
+const searchClear   = document.getElementById('search-clear');
+const searchResults = document.getElementById('search-results');
+let searchActiveIdx = -1;
+
+function doSearch(q) {
+  q = q.trim().toLowerCase();
+  searchClear.style.display = q ? 'block' : 'none';
+  if (!q) { searchResults.style.display = 'none'; return; }
+  const matches = ADDRESSES
+    .map((a, i) => ({ a, i }))
+    .filter(({ a }) =>
+      a.address.toLowerCase().includes(q) ||
+      a.city.toLowerCase().includes(q)
+    )
+    .slice(0, 8);
+  searchResults.innerHTML = '';
+  if (!matches.length) {
+    searchResults.innerHTML = '<li class="sr-none">No results</li>';
+  } else {
+    matches.forEach(({ a, i }) => {
+      const li = document.createElement('li');
+      li.dataset.idx = i;
+      li.innerHTML = `<div class="sr-addr">${a.address}</div><div class="sr-city">${a.city}${a.state ? ', ' + a.state : ''}</div>`;
+      li.addEventListener('mousedown', e => { e.preventDefault(); pickResult(i); });
+      searchResults.appendChild(li);
+    });
+  }
+  searchActiveIdx = -1;
+  searchResults.style.display = 'block';
+}
+
+function pickResult(i) {
+  searchInput.value = '';
+  searchClear.style.display = 'none';
+  searchResults.style.display = 'none';
+  map.flyTo([ADDRESSES[i].lat, ADDRESSES[i].lng], Math.max(map.getZoom(), 13), { duration: 0.6 });
+  selectNode(i);
+}
+
+searchInput.addEventListener('input',  e => doSearch(e.target.value));
+searchInput.addEventListener('focus',  () => { if (searchInput.value.trim()) doSearch(searchInput.value); });
+searchInput.addEventListener('blur',   () => setTimeout(() => { searchResults.style.display = 'none'; }, 150));
+searchClear.addEventListener('click',  () => { searchInput.value = ''; searchClear.style.display = 'none'; searchResults.style.display = 'none'; searchInput.focus(); });
+
+searchInput.addEventListener('keydown', e => {
+  const items = Array.from(searchResults.querySelectorAll('li[data-idx]'));
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    searchActiveIdx = Math.min(searchActiveIdx + 1, items.length - 1);
+    items.forEach((li, n) => li.classList.toggle('sr-active', n === searchActiveIdx));
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    searchActiveIdx = Math.max(searchActiveIdx - 1, 0);
+    items.forEach((li, n) => li.classList.toggle('sr-active', n === searchActiveIdx));
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (searchActiveIdx >= 0 && items[searchActiveIdx]) {
+      pickResult(parseInt(items[searchActiveIdx].dataset.idx));
+    } else if (items.length === 1) {
+      pickResult(parseInt(items[0].dataset.idx));
+    }
+  } else if (e.key === 'Escape') {
+    searchInput.value = '';
+    searchClear.style.display = 'none';
+    searchResults.style.display = 'none';
+    searchInput.blur();
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 //  INIT
 // ════════════════════════════════════════════════════════════════════════════
 document.getElementById('count-label').textContent = `${ADDRESSES.length} addresses`;
@@ -6271,6 +6442,98 @@ if (ADDRESSES.length > 0) {
 
 map.once('load', () => document.getElementById('loading').style.display = 'none');
 setTimeout(() => document.getElementById('loading').style.display = 'none', 2500);
+
+// ════════════════════════════════════════════════════════════════════════════
+//  DISTANCE PANEL
+// ════════════════════════════════════════════════════════════════════════════
+let dpIdxA = null, dpIdxB = null, dpLine = null;
+
+function makeDpSearchBox(inputEl, clearEl, resultsEl, onSelect) {
+  let active = -1;
+  function search(q) {
+    q = q.trim().toLowerCase();
+    clearEl.style.display = q ? 'block' : 'none';
+    if (!q) { resultsEl.style.display = 'none'; return; }
+    const matches = ADDRESSES.map((a, i) => ({ a, i }))
+      .filter(({ a }) => a.address.toLowerCase().includes(q) || a.city.toLowerCase().includes(q))
+      .slice(0, 6);
+    resultsEl.innerHTML = '';
+    if (!matches.length) {
+      resultsEl.innerHTML = '<li class="dp-rn">No results</li>';
+    } else {
+      matches.forEach(({ a, i }) => {
+        const li = document.createElement('li');
+        li.dataset.idx = i;
+        li.innerHTML = `<div class="dp-ra">${a.address}</div><div class="dp-rc">${a.city}${a.state ? ', ' + a.state : ''}</div>`;
+        li.addEventListener('mousedown', e => { e.preventDefault(); pick(i); });
+        resultsEl.appendChild(li);
+      });
+    }
+    active = -1;
+    resultsEl.style.display = 'block';
+  }
+  function pick(i) {
+    inputEl.value = ADDRESSES[i].address;
+    clearEl.style.display = 'block';
+    resultsEl.style.display = 'none';
+    onSelect(i);
+  }
+  inputEl.addEventListener('input',  e => search(e.target.value));
+  inputEl.addEventListener('focus',  () => { if (inputEl.value.trim()) search(inputEl.value); });
+  inputEl.addEventListener('blur',   () => setTimeout(() => { resultsEl.style.display = 'none'; }, 150));
+  clearEl.addEventListener('click',  () => { inputEl.value = ''; clearEl.style.display = 'none'; resultsEl.style.display = 'none'; onSelect(null); inputEl.focus(); });
+  inputEl.addEventListener('keydown', e => {
+    const items = Array.from(resultsEl.querySelectorAll('li[data-idx]'));
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      active = Math.min(active + 1, items.length - 1);
+      items.forEach((li, n) => li.classList.toggle('dp-active', n === active));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      active = Math.max(active - 1, 0);
+      items.forEach((li, n) => li.classList.toggle('dp-active', n === active));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (active >= 0 && items[active]) pick(parseInt(items[active].dataset.idx));
+      else if (items.length === 1) pick(parseInt(items[0].dataset.idx));
+    } else if (e.key === 'Escape') {
+      inputEl.value = ''; clearEl.style.display = 'none';
+      resultsEl.style.display = 'none'; onSelect(null); inputEl.blur();
+    }
+  });
+}
+
+function updateDistLine() {
+  if (dpLine) { map.removeLayer(dpLine); dpLine = null; }
+  const resultEl = document.getElementById('dist-result');
+  if (dpIdxA !== null && dpIdxB !== null) {
+    const km = haversine(ADDRESSES[dpIdxA], ADDRESSES[dpIdxB]);
+    const mi = (km * 0.621371).toFixed(2);
+    document.getElementById('dr-mi').textContent = `${mi} mi`;
+    document.getElementById('dr-km').textContent = `${km.toFixed(2)} km`;
+    resultEl.style.display = 'block';
+    dpLine = L.polyline(
+      [[ADDRESSES[dpIdxA].lat, ADDRESSES[dpIdxA].lng],
+       [ADDRESSES[dpIdxB].lat, ADDRESSES[dpIdxB].lng]],
+      { color: '#f59e0b', weight: 2.5, opacity: 0.9, dashArray: '8 5' }
+    ).addTo(map);
+  } else {
+    resultEl.style.display = 'none';
+  }
+}
+
+makeDpSearchBox(
+  document.getElementById('dp-input-a'),
+  document.getElementById('dp-clear-a'),
+  document.getElementById('dp-results-a'),
+  i => { dpIdxA = i; updateDistLine(); }
+);
+makeDpSearchBox(
+  document.getElementById('dp-input-b'),
+  document.getElementById('dp-clear-b'),
+  document.getElementById('dp-results-b'),
+  i => { dpIdxB = i; updateDistLine(); }
+);
 
 // ════════════════════════════════════════════════════════════════════════════
 //  BROWSER ZOOM GUARD

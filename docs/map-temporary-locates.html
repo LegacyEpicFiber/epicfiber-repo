@@ -22,8 +22,7 @@
     white-space: nowrap;
   }
   #hud .title { font-weight: 700; color: #cbd5e1; letter-spacing: 0.02em; }
-  #hud .count { color: #475569; font-size: 12px; }
-  #hud .selected-info { color: #60a5fa; font-size: 12px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+  #hud .selected-info { color: #60a5fa; font-size: 12px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
   #reset-btn {
     background: #1e293b; border: 1px solid #475569; color: #94a3b8;
     padding: 4px 12px; border-radius: 5px; cursor: pointer; font-size: 12px;
@@ -31,6 +30,33 @@
   }
   #reset-btn:hover { background: #334155; color: #e2e8f0; border-color: #64748b; }
   #reset-btn:active { background: #475569; }
+
+  /* ── SEARCH ── */
+  #search-wrap { position: relative; display: flex; align-items: center; }
+  #search-input {
+    background: #1e293b; border: 1px solid #334155; border-radius: 7px;
+    color: #e2e8f0; font-size: 12px; padding: 5px 26px 5px 10px;
+    outline: none; width: 210px; transition: border-color 0.15s, width 0.2s;
+  }
+  #search-input:focus { border-color: #2563eb; width: 270px; }
+  #search-input::placeholder { color: #475569; }
+  #search-clear {
+    position: absolute; right: 6px; background: none; border: none;
+    color: #475569; cursor: pointer; font-size: 12px; padding: 2px; display: none;
+  }
+  #search-clear:hover { color: #94a3b8; }
+  #search-results {
+    position: absolute; top: calc(100% + 6px); left: 0;
+    background: #1e293b; border: 1px solid #334155; border-radius: 8px;
+    list-style: none; min-width: 270px; max-height: 230px; overflow-y: auto;
+    z-index: 2000; box-shadow: 0 8px 24px rgba(0,0,0,0.55); display: none;
+  }
+  #search-results li { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #0f1117; }
+  #search-results li:last-child { border-bottom: none; }
+  #search-results li:hover, #search-results li.sr-active { background: #273447; }
+  #search-results .sr-addr { color: #f1f5f9; font-weight: 600; font-size: 12px; }
+  #search-results .sr-city { color: #64748b; font-size: 11px; }
+  #search-results .sr-none { color: #475569; text-align: center; padding: 12px; cursor: default; font-size: 12px; }
 
   /* ── LEGEND ── */
   #legend {
@@ -66,6 +92,52 @@
     padding: 10px 14px; z-index: 1000; font-size: 11px; color: #475569;
     line-height: 1.6;
   }
+
+  /* ── DISTANCE PANEL ── */
+  #dist-panel {
+    position: fixed; top: 12px; right: 16px;
+    background: rgba(15,17,23,0.88); backdrop-filter: blur(6px);
+    border: 1px solid #334155; border-radius: 10px;
+    padding: 11px 14px; z-index: 1000; font-size: 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    min-width: 200px;
+  }
+  #dist-panel .dp-title { color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
+  .dp-label { color: #475569; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; margin-top: 7px; }
+  .dp-label:first-of-type { margin-top: 0; }
+  .dp-sw { position: relative; }
+  .dp-sw input {
+    background: #1e293b; border: 1px solid #334155; border-radius: 6px;
+    color: #e2e8f0; font-size: 11px; padding: 5px 22px 5px 8px;
+    outline: none; width: 100%; transition: border-color 0.15s;
+  }
+  .dp-sw input:focus { border-color: #2563eb; }
+  .dp-sw input::placeholder { color: #475569; }
+  .dp-sw-clear {
+    position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; color: #475569; cursor: pointer;
+    font-size: 11px; padding: 1px; display: none;
+  }
+  .dp-sw-clear:hover { color: #94a3b8; }
+  .dp-sw-results {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: #1e293b; border: 1px solid #334155; border-radius: 7px;
+    list-style: none; max-height: 170px; overflow-y: auto;
+    z-index: 2001; box-shadow: 0 6px 18px rgba(0,0,0,0.5); display: none;
+  }
+  .dp-sw-results li { padding: 6px 10px; cursor: pointer; border-bottom: 1px solid #0f1117; font-size: 11px; }
+  .dp-sw-results li:last-child { border-bottom: none; }
+  .dp-sw-results li:hover, .dp-sw-results li.dp-active { background: #273447; }
+  .dp-sw-results .dp-ra { color: #f1f5f9; font-weight: 600; }
+  .dp-sw-results .dp-rc { color: #64748b; font-size: 10px; }
+  .dp-sw-results .dp-rn { color: #475569; text-align: center; padding: 10px; cursor: default; }
+  #dist-result {
+    margin-top: 10px; padding: 8px 10px;
+    background: #0f1117; border-radius: 7px; border: 1px solid #1e293b;
+    text-align: center; display: none;
+  }
+  #dist-result .dr-mi { color: #f59e0b; font-size: 17px; font-weight: 700; }
+  #dist-result .dr-km { color: #475569; font-size: 11px; margin-top: 2px; }
 
   /* ── HOVER TOOLTIP ── */
   .leaflet-tooltip.addr-tip {
@@ -137,7 +209,11 @@
 <!-- HUD -->
 <div id="hud">
   <span class="title">TEMPORARY LOCATES</span>
-  <span class="count" id="count-label"></span>
+  <div id="search-wrap">
+    <input id="search-input" type="text" placeholder="🔍  Search address or city…" autocomplete="off" spellcheck="false">
+    <button id="search-clear" title="Clear">✕</button>
+    <ul id="search-results"></ul>
+  </div>
   <span class="selected-info" id="selected-label"></span>
   <button id="reset-btn" onclick="resetAll()" style="display:none">✕ Reset</button>
 </div>
@@ -169,9 +245,31 @@
 
 <!-- Instructions -->
 <div id="instructions">
+  <div id="count-label" style="color:#64748b; font-size:11px; margin-bottom:7px; font-weight:600;"></div>
   <strong style="color:#64748b">Hover</strong> → address + nearest 5 lines<br>
   <strong style="color:#64748b">Click</strong> any dot → proximity view<br>
   <strong style="color:#64748b">Click again</strong> → deselect
+</div>
+
+<!-- Distance Panel -->
+<div id="dist-panel">
+  <div class="dp-title">📏 Distance</div>
+  <div class="dp-label">From</div>
+  <div class="dp-sw">
+    <input id="dp-input-a" type="text" placeholder="Search address or city…" autocomplete="off" spellcheck="false">
+    <button class="dp-sw-clear" id="dp-clear-a">✕</button>
+    <ul class="dp-sw-results" id="dp-results-a"></ul>
+  </div>
+  <div class="dp-label">To</div>
+  <div class="dp-sw">
+    <input id="dp-input-b" type="text" placeholder="Search address or city…" autocomplete="off" spellcheck="false">
+    <button class="dp-sw-clear" id="dp-clear-b">✕</button>
+    <ul class="dp-sw-results" id="dp-results-b"></ul>
+  </div>
+  <div id="dist-result">
+    <div class="dr-mi" id="dr-mi"></div>
+    <div class="dr-km" id="dr-km"></div>
+  </div>
 </div>
 
 <!-- Map -->
@@ -695,8 +793,8 @@ const ADDRESSES = [
   {
     "address": "1532 S CHERRY DR",
     "city": "STEVENSVILLE",
-    "county": "",
-    "township": "",
+    "county": "Ravalli County",
+    "township": "Stevensville Ccd",
     "lat": 42.020313685588,
     "lng": -86.491277060428,
     "maps_url": "https://maps.google.com/?q=1532+S+CHERRY+DR%2C+STEVENSVILLE",
@@ -946,6 +1044,79 @@ function resetAll() {
 map.on('click', resetAll);
 
 // ════════════════════════════════════════════════════════════════════════════
+//  SEARCH
+// ════════════════════════════════════════════════════════════════════════════
+const searchInput   = document.getElementById('search-input');
+const searchClear   = document.getElementById('search-clear');
+const searchResults = document.getElementById('search-results');
+let searchActiveIdx = -1;
+
+function doSearch(q) {
+  q = q.trim().toLowerCase();
+  searchClear.style.display = q ? 'block' : 'none';
+  if (!q) { searchResults.style.display = 'none'; return; }
+  const matches = ADDRESSES
+    .map((a, i) => ({ a, i }))
+    .filter(({ a }) =>
+      a.address.toLowerCase().includes(q) ||
+      a.city.toLowerCase().includes(q)
+    )
+    .slice(0, 8);
+  searchResults.innerHTML = '';
+  if (!matches.length) {
+    searchResults.innerHTML = '<li class="sr-none">No results</li>';
+  } else {
+    matches.forEach(({ a, i }) => {
+      const li = document.createElement('li');
+      li.dataset.idx = i;
+      li.innerHTML = `<div class="sr-addr">${a.address}</div><div class="sr-city">${a.city}${a.state ? ', ' + a.state : ''}</div>`;
+      li.addEventListener('mousedown', e => { e.preventDefault(); pickResult(i); });
+      searchResults.appendChild(li);
+    });
+  }
+  searchActiveIdx = -1;
+  searchResults.style.display = 'block';
+}
+
+function pickResult(i) {
+  searchInput.value = '';
+  searchClear.style.display = 'none';
+  searchResults.style.display = 'none';
+  map.flyTo([ADDRESSES[i].lat, ADDRESSES[i].lng], Math.max(map.getZoom(), 13), { duration: 0.6 });
+  selectNode(i);
+}
+
+searchInput.addEventListener('input',  e => doSearch(e.target.value));
+searchInput.addEventListener('focus',  () => { if (searchInput.value.trim()) doSearch(searchInput.value); });
+searchInput.addEventListener('blur',   () => setTimeout(() => { searchResults.style.display = 'none'; }, 150));
+searchClear.addEventListener('click',  () => { searchInput.value = ''; searchClear.style.display = 'none'; searchResults.style.display = 'none'; searchInput.focus(); });
+
+searchInput.addEventListener('keydown', e => {
+  const items = Array.from(searchResults.querySelectorAll('li[data-idx]'));
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    searchActiveIdx = Math.min(searchActiveIdx + 1, items.length - 1);
+    items.forEach((li, n) => li.classList.toggle('sr-active', n === searchActiveIdx));
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    searchActiveIdx = Math.max(searchActiveIdx - 1, 0);
+    items.forEach((li, n) => li.classList.toggle('sr-active', n === searchActiveIdx));
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (searchActiveIdx >= 0 && items[searchActiveIdx]) {
+      pickResult(parseInt(items[searchActiveIdx].dataset.idx));
+    } else if (items.length === 1) {
+      pickResult(parseInt(items[0].dataset.idx));
+    }
+  } else if (e.key === 'Escape') {
+    searchInput.value = '';
+    searchClear.style.display = 'none';
+    searchResults.style.display = 'none';
+    searchInput.blur();
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 //  INIT
 // ════════════════════════════════════════════════════════════════════════════
 document.getElementById('count-label').textContent = `${ADDRESSES.length} addresses`;
@@ -961,6 +1132,98 @@ if (ADDRESSES.length > 0) {
 
 map.once('load', () => document.getElementById('loading').style.display = 'none');
 setTimeout(() => document.getElementById('loading').style.display = 'none', 2500);
+
+// ════════════════════════════════════════════════════════════════════════════
+//  DISTANCE PANEL
+// ════════════════════════════════════════════════════════════════════════════
+let dpIdxA = null, dpIdxB = null, dpLine = null;
+
+function makeDpSearchBox(inputEl, clearEl, resultsEl, onSelect) {
+  let active = -1;
+  function search(q) {
+    q = q.trim().toLowerCase();
+    clearEl.style.display = q ? 'block' : 'none';
+    if (!q) { resultsEl.style.display = 'none'; return; }
+    const matches = ADDRESSES.map((a, i) => ({ a, i }))
+      .filter(({ a }) => a.address.toLowerCase().includes(q) || a.city.toLowerCase().includes(q))
+      .slice(0, 6);
+    resultsEl.innerHTML = '';
+    if (!matches.length) {
+      resultsEl.innerHTML = '<li class="dp-rn">No results</li>';
+    } else {
+      matches.forEach(({ a, i }) => {
+        const li = document.createElement('li');
+        li.dataset.idx = i;
+        li.innerHTML = `<div class="dp-ra">${a.address}</div><div class="dp-rc">${a.city}${a.state ? ', ' + a.state : ''}</div>`;
+        li.addEventListener('mousedown', e => { e.preventDefault(); pick(i); });
+        resultsEl.appendChild(li);
+      });
+    }
+    active = -1;
+    resultsEl.style.display = 'block';
+  }
+  function pick(i) {
+    inputEl.value = ADDRESSES[i].address;
+    clearEl.style.display = 'block';
+    resultsEl.style.display = 'none';
+    onSelect(i);
+  }
+  inputEl.addEventListener('input',  e => search(e.target.value));
+  inputEl.addEventListener('focus',  () => { if (inputEl.value.trim()) search(inputEl.value); });
+  inputEl.addEventListener('blur',   () => setTimeout(() => { resultsEl.style.display = 'none'; }, 150));
+  clearEl.addEventListener('click',  () => { inputEl.value = ''; clearEl.style.display = 'none'; resultsEl.style.display = 'none'; onSelect(null); inputEl.focus(); });
+  inputEl.addEventListener('keydown', e => {
+    const items = Array.from(resultsEl.querySelectorAll('li[data-idx]'));
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      active = Math.min(active + 1, items.length - 1);
+      items.forEach((li, n) => li.classList.toggle('dp-active', n === active));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      active = Math.max(active - 1, 0);
+      items.forEach((li, n) => li.classList.toggle('dp-active', n === active));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (active >= 0 && items[active]) pick(parseInt(items[active].dataset.idx));
+      else if (items.length === 1) pick(parseInt(items[0].dataset.idx));
+    } else if (e.key === 'Escape') {
+      inputEl.value = ''; clearEl.style.display = 'none';
+      resultsEl.style.display = 'none'; onSelect(null); inputEl.blur();
+    }
+  });
+}
+
+function updateDistLine() {
+  if (dpLine) { map.removeLayer(dpLine); dpLine = null; }
+  const resultEl = document.getElementById('dist-result');
+  if (dpIdxA !== null && dpIdxB !== null) {
+    const km = haversine(ADDRESSES[dpIdxA], ADDRESSES[dpIdxB]);
+    const mi = (km * 0.621371).toFixed(2);
+    document.getElementById('dr-mi').textContent = `${mi} mi`;
+    document.getElementById('dr-km').textContent = `${km.toFixed(2)} km`;
+    resultEl.style.display = 'block';
+    dpLine = L.polyline(
+      [[ADDRESSES[dpIdxA].lat, ADDRESSES[dpIdxA].lng],
+       [ADDRESSES[dpIdxB].lat, ADDRESSES[dpIdxB].lng]],
+      { color: '#f59e0b', weight: 2.5, opacity: 0.9, dashArray: '8 5' }
+    ).addTo(map);
+  } else {
+    resultEl.style.display = 'none';
+  }
+}
+
+makeDpSearchBox(
+  document.getElementById('dp-input-a'),
+  document.getElementById('dp-clear-a'),
+  document.getElementById('dp-results-a'),
+  i => { dpIdxA = i; updateDistLine(); }
+);
+makeDpSearchBox(
+  document.getElementById('dp-input-b'),
+  document.getElementById('dp-clear-b'),
+  document.getElementById('dp-results-b'),
+  i => { dpIdxB = i; updateDistLine(); }
+);
 
 // ════════════════════════════════════════════════════════════════════════════
 //  BROWSER ZOOM GUARD
