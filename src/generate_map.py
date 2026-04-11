@@ -63,7 +63,8 @@ SPREADSHEET_ID   = cfg["spreadsheet_id"]
 SERVICE_ACCT     = Path(cfg["service_account_path"]).expanduser()
 OUTPUT_DIR       = Path(cfg["docs_dir"]).expanduser()
 CACHE_DIR        = Path(cfg.get("cache_dir", str(REPO_ROOT / "cache"))).expanduser()
-CACHE_FILE       = CACHE_DIR / "geocode_cache.json"
+CACHE_FILE           = CACHE_DIR / "geocode_cache.json"
+CITY_META_CACHE_FILE = CACHE_DIR / "city_meta_cache.json"
 TEMPLATE_FILE    = Path(__file__).parent / "map_template.html"
 TABS             = cfg.get("tabs", {})
 AUTO_PUSH        = cfg.get("auto_push", False)
@@ -157,6 +158,7 @@ CITY_META = {
     "WALKERTON":        ("St. Joseph County",  "Harris Township"),
     "WARSAW":           ("Kosciusko County",   "Wayne Township"),
     "WAYLAND":          ("Allegan County",     "Wayland Township"),
+    "NORTH WEBSTER":    ("Kosciusko County",   "Wayne Township"),
     "WINAMAC":          ("Pulaski County",     "Beaver Township"),
     "WINONA LAKE":      ("Kosciusko County",   "Wayne Township"),
     "WOLCOTTVILLE":     ("LaGrange County",    "Wolcottville Township"),
@@ -372,6 +374,77 @@ def geocode(address, city, cache):
     return result
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  CITY META  (county + township lookup with Census fallback)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _load_city_meta_cache():
+    if CITY_META_CACHE_FILE.exists():
+        try:
+            with open(CITY_META_CACHE_FILE, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def _save_city_meta_cache(cache):
+    CITY_META_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(CITY_META_CACHE_FILE, "w", encoding="utf-8") as f:
+        json.dump(cache, f, indent=2)
+
+def _fetch_city_meta_census(city, state):
+    """Query Census geographies endpoint for county + township of a city."""
+    try:
+        params = urllib.parse.urlencode({
+            "street":    "1 Main St",
+            "city":      city,
+            "state":     state,
+            "benchmark": "Public_AR_Current",
+            "vintage":   "Current_Current",
+            "layers":    "Counties,County Subdivisions",
+            "format":    "json",
+        })
+        url = (f"https://geocoding.geo.census.gov/geocoder/geographies/address?{params}")
+        req = urllib.request.Request(url, headers={"User-Agent": NOMINATIM_UA})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+        matches = data.get("result", {}).get("addressMatches", [])
+        if not matches:
+            return ("", "")
+        geos     = matches[0].get("geographies", {})
+        counties = geos.get("Counties", [])
+        subdivs  = geos.get("County Subdivisions", [])
+        county   = counties[0]["NAME"].strip() if counties else ""
+        township = subdivs[0]["NAME"].strip()  if subdivs  else ""
+        if county and "County" not in county:
+            county = f"{county} County"
+        if township:
+            township = township.title()  # normalize "wayne township" → "Wayne Township"
+        return (county, township)
+    except Exception as e:
+        print(f"    ⚠  Census city-meta lookup failed for {city}: {e}")
+        return ("", "")
+
+def get_city_meta(city, city_meta_cache):
+    """Return (county, township) for a city.
+    Priority: runtime cache → CITY_META hardcoded table → Census API.
+    """
+    key = city.upper()
+    if key in city_meta_cache:
+        entry = city_meta_cache[key]
+        return (entry[0], entry[1])
+    if key in CITY_META:
+        result = CITY_META[key]
+        city_meta_cache[key] = list(result)
+        return result
+    # Unknown city — ask Census
+    state  = _state_for(city)
+    result = _fetch_city_meta_census(city, state)
+    if result[0]:
+        print(f"    ℹ  Census meta → {city}: {result[0]}, {result[1]}")
+    city_meta_cache[key] = list(result)
+    return result
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  BUILD ADDRESS LIST
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -385,6 +458,7 @@ def build_address_list(rows, cache):
         print(f"    ❌  ADDRESS or CITY column not found. Columns: {', '.join(keys)}")
         return []
     print(f"    Columns → address: {addr_col!r}   city: {city_col!r}")
+    city_meta_cache = _load_city_meta_cache()
     out, new_count = [], 0
     for row in rows:
         address = str(row.get(addr_col, "")).strip()
@@ -397,7 +471,7 @@ def build_address_list(rows, cache):
             continue
         if not was_cached:
             new_count += 1
-        county, township = CITY_META.get(city.upper(), ("", ""))
+        county, township = get_city_meta(city, city_meta_cache)
         maps_url = ("https://maps.google.com/?q="
                     + urllib.parse.quote_plus(f"{address}, {city}"))
         out.append({
@@ -410,6 +484,7 @@ def build_address_list(rows, cache):
             "maps_url": maps_url,
             "row_num":  row.get("_row_num"),
         })
+    _save_city_meta_cache(city_meta_cache)
     print(f"    {len(out)} addresses ready  ({new_count} newly geocoded)")
     return out
 

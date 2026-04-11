@@ -119,6 +119,10 @@ These must be set at **Settings → Secrets and variables → Actions** in the r
 - **Completed jobs excluded** — rows highlighted `#00ff00` (neon green) in the sheet are filtered out of the map entirely
 - **Dark theme** throughout; CARTO Voyager base tiles
 - **Zoom conflict resolved** — Mac trackpad pinch and Cmd/Ctrl +/-/0 zoom the Leaflet map only; browser page zoom is suppressed
+- **Row number in popup** — clicking a dot shows "Row X" subtext (spreadsheet row number)
+- **Search bar** — top-center HUD has a live search box; type address or city to get a dropdown of up to 8 matches; click or press Enter to fly to and select that marker
+- **Distance panel** — top-right panel with From/To search boxes; selecting both draws an amber dashed line on the map and shows straight-line distance in miles and km
+- **County/township auto-lookup** — cities not in the hardcoded table are looked up via Census geographies API; results cached in `cache/city_meta_cache.json`
 
 ---
 
@@ -154,3 +158,5 @@ python3 src/generate_map.py
 | v1.0.0 | 2026-04-10 | Production release. GitHub Actions pipeline, Google geocoding (633-entry cache), Leaflet proximity maps, hover address tooltips |
 | v1.0.1 | 2026-04-10 | Count/Distance proximity toggle; exclude #00ff00 completed rows; hourly sync (was daily) |
 | v1.0.2 | 2026-04-11 | Fix browser page-zoom conflict: Mac trackpad pinch and Cmd/Ctrl +/-/0 now zoom Leaflet map only |
+| v1.0.3 | 2026-04-11 | Add row number to popups (Row X subtext); add search bar to HUD; move address count to instructions panel |
+| v1.0.4 | 2026-04-11 | Distance panel (top-right, From/To search with amber line + mi/km readout); Census auto-lookup for county/township of unknown cities (cached in city_meta_cache.json); add NORTH WEBSTER to CITY_META |
