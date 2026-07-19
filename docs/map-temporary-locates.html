@@ -251,6 +251,11 @@
   <strong style="color:#64748b">Click again</strong> → deselect
 </div>
 
+<!-- Unplaced (un-geocodable) rows -->
+<div id="unplaced" style="position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+  background:rgba(120,20,20,0.9); border:1px solid #7f1d1d; border-radius:8px; padding:6px 12px;
+  z-index:1000; font-size:12px; color:#fecaca; cursor:pointer; display:none;"></div>
+
 <!-- Distance Panel -->
 <div id="dist-panel">
   <div class="dp-title">📏 Distance</div>
@@ -283,84 +288,113 @@ const ADDRESSES = [
   {
     "address": "2470 E WIDMAN RD",
     "city": "COLUMBIA CITY",
+    "state": "IN",
+    "unit": null,
     "county": "Whitley County",
     "township": "Columbia City",
     "lat": 41.1781679,
     "lng": -85.4533689,
     "maps_url": "https://maps.google.com/?q=2470+E+WIDMAN+RD%2C+COLUMBIA+CITY",
-    "row_num": 2
+    "row_num": 2,
+    "offset_applied": false
   },
   {
     "address": "520 N MAIN ST",
     "city": "COLUMBIA CITY",
+    "state": "IN",
+    "unit": null,
     "county": "Whitley County",
     "township": "Columbia City",
     "lat": 41.1678101,
     "lng": -85.4843817,
     "maps_url": "https://maps.google.com/?q=520+N+MAIN+ST%2C+COLUMBIA+CITY",
-    "row_num": 3
+    "row_num": 3,
+    "offset_applied": false
   },
   {
     "address": "100073 ROSZALKA CT",
     "city": "GRANGER",
+    "state": "IN",
+    "unit": null,
     "county": "St. Joseph County",
     "township": "German Township",
     "lat": 41.7203377,
     "lng": -86.0647047,
     "maps_url": "https://maps.google.com/?q=100073+ROSZALKA+CT%2C+GRANGER",
-    "row_num": 4
+    "row_num": 4,
+    "offset_applied": false
   },
   {
     "address": "11870 W 710 N",
     "city": "MIDDLEBURY",
-    "county": "",
-    "township": "",
+    "state": "IN",
+    "unit": null,
+    "county": "LaGrange County",
+    "township": "Van Buren Township",
     "lat": 41.7412239,
     "lng": -85.6568623,
     "maps_url": "https://maps.google.com/?q=11870+W+710+N%2C+MIDDLEBURY",
-    "row_num": 5
+    "row_num": 5,
+    "offset_applied": false
   },
   {
     "address": "403 ASH ST",
     "city": "PIERCETON",
-    "county": "",
-    "township": "",
+    "state": "IN",
+    "unit": null,
+    "county": "Kosciusko County",
+    "township": "Washington Township",
     "lat": 41.1947486,
     "lng": -85.70285539999999,
     "maps_url": "https://maps.google.com/?q=403+ASH+ST%2C+PIERCETON",
-    "row_num": 6
+    "row_num": 6,
+    "offset_applied": false
   },
   {
     "address": "7900 W SR 14",
     "city": "SOUTH WHITLEY",
+    "state": "IN",
+    "unit": null,
     "county": "Whitley County",
     "township": "Columbia Township",
     "lat": 41.0775546,
     "lng": -85.64334869999999,
     "maps_url": "https://maps.google.com/?q=7900+W+SR+14%2C+SOUTH+WHITLEY",
-    "row_num": 7
+    "row_num": 7,
+    "offset_applied": false
   },
   {
     "address": "3009 S WASHINGTON ST",
     "city": "WARSAW",
+    "state": "IN",
+    "unit": null,
     "county": "Kosciusko County",
     "township": "Wayne Township",
     "lat": 41.2351638,
     "lng": -85.8593432,
     "maps_url": "https://maps.google.com/?q=3009+S+WASHINGTON+ST%2C+WARSAW",
-    "row_num": 8
+    "row_num": 8,
+    "offset_applied": false
   },
   {
     "address": "563 N WEST ST",
     "city": "COLOMA",
-    "county": "",
-    "township": "",
+    "state": "IN",
+    "unit": null,
+    "county": "Berrien County",
+    "township": "Coloma City",
     "lat": 42.1869598,
     "lng": -86.308313,
     "maps_url": "https://maps.google.com/?q=563+N+WEST+ST%2C+COLOMA",
-    "row_num": 9
+    "row_num": 9,
+    "offset_applied": false
   }
 ];
+const UNPLACED  = [];
+
+// Escape sheet-derived data before inserting via innerHTML / template strings.
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 
 // ════════════════════════════════════════════════════════════════════════════
 //  MAP INIT
@@ -420,7 +454,7 @@ const markers = ADDRESSES.map((a, i) => {
   const m = L.circleMarker([a.lat, a.lng], markerOpts(C.default, false));
   m.bindPopup(() => buildPopup(i), { maxWidth: 260, autoPan: true });
   m.bindTooltip(
-    () => `<strong>${a.address}</strong><br><span style="color:#94a3b8">${a.city}${a.state ? ', ' + a.state : ''}</span>`,
+    () => `<strong>${esc(a.address)}</strong><br><span style="color:#94a3b8">${esc(a.city)}${a.state ? ', ' + esc(a.state) : ''}</span>`,
     { sticky: true, direction: 'top', offset: [0, -8], className: 'addr-tip', opacity: 0.97 }
   );
   m.on('click', (e) => { L.DomEvent.stopPropagation(e); selectNode(i); });
@@ -438,16 +472,16 @@ function buildPopup(i) {
     const mi = (km * 0.621371).toFixed(1);
     distHtml = `<div class="popup-dist">${mi} mi from selected</div>`;
   }
-  const meta = [a.county, a.township].filter(Boolean).join(' · ');
+  const meta = [esc(a.county), esc(a.township)].filter(Boolean).join(' · ');
   const metaHtml = meta ? `<div class="popup-meta">${meta}</div>` : '';
-  const rowHtml = a.row_num ? `<div class="popup-row">Row ${a.row_num}</div>` : '';
+  const rowHtml = a.row_num ? `<div class="popup-row">Row ${a.row_num}${a.extra_rows && a.extra_rows.length ? ', ' + a.extra_rows.join(', ') : ''}</div>` : '';
   return `
-    <div class="popup-address">${a.address}</div>
+    <div class="popup-address">${esc(a.address)}</div>
     ${rowHtml}
-    <div class="popup-city">${a.city}${a.state ? ', ' + a.state : ''}</div>
+    <div class="popup-city">${esc(a.city)}${a.state ? ', ' + esc(a.state) : ''}</div>
     ${metaHtml}
     ${distHtml}
-    <a class="popup-link" href="${a.maps_url}" target="_blank">Open in Google Maps ↗</a>
+    <a class="popup-link" href="${esc(a.maps_url)}" target="_blank">Open in Google Maps ↗</a>
   `;
 }
 
@@ -619,7 +653,7 @@ function doSearch(q) {
     matches.forEach(({ a, i }) => {
       const li = document.createElement('li');
       li.dataset.idx = i;
-      li.innerHTML = `<div class="sr-addr">${a.address}</div><div class="sr-city">${a.city}${a.state ? ', ' + a.state : ''}</div>`;
+      li.innerHTML = `<div class="sr-addr">${esc(a.address)}</div><div class="sr-city">${esc(a.city)}${a.state ? ', ' + esc(a.state) : ''}</div>`;
       li.addEventListener('mousedown', e => { e.preventDefault(); pickResult(i); });
       searchResults.appendChild(li);
     });
@@ -671,6 +705,18 @@ searchInput.addEventListener('keydown', e => {
 // ════════════════════════════════════════════════════════════════════════════
 document.getElementById('count-label').textContent = `${ADDRESSES.length} addresses`;
 
+// ── Unplaced (un-geocodable) rows: surfaced instead of silently dropped ──
+(function(){
+  const el = document.getElementById('unplaced');
+  if (!UNPLACED.length) return;
+  el.style.display = 'block';
+  el.textContent = `⚠ ${UNPLACED.length} address${UNPLACED.length > 1 ? 'es' : ''} couldn't be placed — tap to view`;
+  el.addEventListener('click', () => {
+    alert('Not placed on the map (fix in the sheet):\n\n' +
+      UNPLACED.map(u => `Row ${u.row_num}: ${u.address}, ${u.city}`).join('\n'));
+  });
+})();
+
 if (ADDRESSES.length > 0) {
   const bounds = L.latLngBounds(ADDRESSES.map(a => [a.lat, a.lng]));
   map.fitBounds(bounds.pad(0.08));
@@ -704,7 +750,7 @@ function makeDpSearchBox(inputEl, clearEl, resultsEl, onSelect) {
       matches.forEach(({ a, i }) => {
         const li = document.createElement('li');
         li.dataset.idx = i;
-        li.innerHTML = `<div class="dp-ra">${a.address}</div><div class="dp-rc">${a.city}${a.state ? ', ' + a.state : ''}</div>`;
+        li.innerHTML = `<div class="dp-ra">${esc(a.address)}</div><div class="dp-rc">${esc(a.city)}${a.state ? ', ' + esc(a.state) : ''}</div>`;
         li.addEventListener('mousedown', e => { e.preventDefault(); pick(i); });
         resultsEl.appendChild(li);
       });
