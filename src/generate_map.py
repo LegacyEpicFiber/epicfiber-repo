@@ -22,7 +22,6 @@ GitHub Pages URL (after first push):
 
 import json
 import os
-import re
 import subprocess
 import sys
 import time
@@ -30,6 +29,8 @@ import urllib.parse
 import urllib.request
 from datetime import datetime
 from pathlib import Path
+
+import addresslib
 
 # ── dependency check ──────────────────────────────────────────────────────────
 try:
@@ -43,7 +44,7 @@ except ImportError:
     )
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  LOAD CONFIG
+#  CONFIG
 # ══════════════════════════════════════════════════════════════════════════════
 
 REPO_ROOT   = Path(__file__).parent.parent   # epicfiber-maps/
@@ -58,17 +59,27 @@ def load_config():
     with open(CONFIG_FILE, encoding="utf-8") as f:
         return json.load(f)
 
-cfg              = load_config()
-SPREADSHEET_ID   = cfg["spreadsheet_id"]
-SERVICE_ACCT     = Path(cfg["service_account_path"]).expanduser()
-OUTPUT_DIR       = Path(cfg["docs_dir"]).expanduser()
-CACHE_DIR        = Path(cfg.get("cache_dir", str(REPO_ROOT / "cache"))).expanduser()
-CACHE_FILE           = CACHE_DIR / "geocode_cache.json"
-CITY_META_CACHE_FILE = CACHE_DIR / "city_meta_cache.json"
-TEMPLATE_FILE    = Path(__file__).parent / "map_template.html"
-TABS             = cfg.get("tabs", {})
-AUTO_PUSH        = cfg.get("auto_push", False)
-REPO_PATH        = Path(cfg.get("repo_path", str(REPO_ROOT))).expanduser()
+def load_settings():
+    """Build the runtime settings from config.json + environment.
+
+    Called only from main() — importing this module has no side effects, so
+    the pure logic below can be unit-tested without a config file.
+    """
+    cfg = load_config()
+    cache_dir = Path(cfg.get("cache_dir", str(REPO_ROOT / "cache"))).expanduser()
+    return {
+        "spreadsheet_id":       cfg["spreadsheet_id"],
+        "service_acct":         Path(cfg["service_account_path"]).expanduser(),
+        "output_dir":           Path(cfg["docs_dir"]).expanduser(),
+        "cache_dir":            cache_dir,
+        "cache_file":           cache_dir / "geocode_cache.json",
+        "city_meta_cache_file": cache_dir / "city_meta_cache.json",
+        "tabs":                 cfg.get("tabs", {}),
+        "auto_push":            cfg.get("auto_push", False),
+        "repo_path":            Path(cfg.get("repo_path", str(REPO_ROOT))).expanduser(),
+        # env var takes precedence (GitHub Actions Secret); falls back to config.
+        "google_key":           os.environ.get("GOOGLE_MAPS_API_KEY") or cfg.get("google_maps_api_key", ""),
+    }
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  CONSTANTS
@@ -76,27 +87,13 @@ REPO_PATH        = Path(cfg.get("repo_path", str(REPO_ROOT))).expanduser()
 
 NOMINATIM_UA  = "LegacyEpicFiber-AddressMap/1.0 (legacy.buryandbore@gmail.com)"
 GEOCODE_DELAY = 1.2   # seconds between Nominatim requests (respect rate limit)
-
-# Google Maps API key — env var takes precedence (set in GitHub Actions via Secret),
-# falls back to value in config.json for local runs.
-GOOGLE_MAPS_KEY = (
-    os.environ.get("GOOGLE_MAPS_API_KEY")
-    or cfg.get("google_maps_api_key", "")
-)
+TEMPLATE_FILE = Path(__file__).parent / "map_template.html"
 
 # Detect GitHub Actions environment so we skip the local git-push step
 # (Actions handles the commit/push itself via the workflow file).
 IN_CI = os.environ.get("GITHUB_ACTIONS") == "true"
 
-# Cities in Michigan — everything else defaults to Indiana
-MICHIGAN_CITIES = {
-    "BARODA", "BRIDGMAN", "BYRON CENTER", "CASSOPOLIS",
-    "CORUNNA", "DECATUR", "DOWAGIAC", "FENNVILLE",
-    "GRAND HAVEN", "MOLINE", "PLAINWELL", "SAWYER",
-    "VICKSBURG", "WATERVLIET", "WAYLAND", "WYOMING",
-}
-
-# City → (County, Township) for the service area
+# City → (County, Township) for the service area (curated; authoritative)
 CITY_META = {
     "ASHLEY":           ("DeKalb County",     "Ashley Township"),
     "BARODA":           ("Berrien County",     "Baroda Township"),
@@ -174,16 +171,17 @@ SCOPES = [
 #  GOOGLE SHEETS
 # ══════════════════════════════════════════════════════════════════════════════
 
-def open_spreadsheet():
-    if not SERVICE_ACCT.exists():
+def open_spreadsheet(settings):
+    service_acct = settings["service_acct"]
+    if not service_acct.exists():
         sys.exit(
-            f"\n❌  Service account key not found:\n      {SERVICE_ACCT}\n"
+            f"\n❌  Service account key not found:\n      {service_acct}\n"
             "    Set the correct path in config.json → service_account_path.\n"
         )
-    creds = Credentials.from_service_account_file(str(SERVICE_ACCT), scopes=SCOPES)
+    creds = Credentials.from_service_account_file(str(service_acct), scopes=SCOPES)
     gc    = gspread.authorize(creds)
     try:
-        return gc.open_by_key(SPREADSHEET_ID)
+        return gc.open_by_key(settings["spreadsheet_id"])
     except gspread.exceptions.APIError as e:
         if "403" in str(e):
             sys.exit(
@@ -231,12 +229,12 @@ def _get_green_row_indices(creds, spreadsheet_id, sheet_name):
         return set()
 
 
-def fetch_tab(spreadsheet, gid):
+def fetch_tab(spreadsheet, gid, spreadsheet_id):
     ws = spreadsheet.get_worksheet_by_id(int(gid))
 
     # Identify completed rows (neon green #00ff00) to exclude before geocoding
     green_indices = _get_green_row_indices(
-        spreadsheet.client.auth, SPREADSHEET_ID, ws.title
+        spreadsheet.client.auth, spreadsheet_id, ws.title
     )
     if green_indices:
         print(f"    Excluding {len(green_indices)} completed (green) row(s)")
@@ -269,31 +267,17 @@ def fetch_tab(spreadsheet, gid):
 #  GEOCODE CACHE
 # ══════════════════════════════════════════════════════════════════════════════
 
-def load_cache():
-    if CACHE_FILE.exists():
+def load_cache(cache_file):
+    if cache_file.exists():
         try:
-            return json.loads(CACHE_FILE.read_text(encoding="utf-8"))
+            return json.loads(cache_file.read_text(encoding="utf-8"))
         except Exception:
             return {}
     return {}
 
-def save_cache(cache):
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
-
-def _state_for(city):
-    return "MI" if city.upper().strip() in MICHIGAN_CITIES else "IN"
-
-def _clean_address(address):
-    address = re.sub(r'\s*/.*$', '', address)
-    address = re.sub(
-        r'\s+(?:LOT\.?|UNIT|APT\.?|#|STE\.?)\s*[\w.-]*\s*$',
-        '', address, flags=re.IGNORECASE
-    )
-    address = re.sub(r'\bIN-(\d+)\b', r'Indiana Route \1', address, flags=re.IGNORECASE)
-    address = re.sub(r'\bUS-(\d+)\b', r'US Route \1', address, flags=re.IGNORECASE)
-    address = re.sub(r'\bCO\.?\s*R(?:OA)?D\.?\b', 'County Road', address, flags=re.IGNORECASE)
-    return address.strip()
+def save_cache(cache, cache_file):
+    cache_file.parent.mkdir(parents=True, exist_ok=True)
+    cache_file.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
 
 def _geocode_google(clean_addr, city, state, api_key):
     """Primary geocoder — Google Maps Geocoding API.
@@ -353,186 +337,174 @@ def _geocode_nominatim(clean_addr, city, state):
         pass
     return None
 
-def geocode(address, city, cache):
-    key = f"{address}|||{city}"
+def geocode_clean(clean_addr, city, state, google_key, cache):
+    """Geocoder waterfall (Google → Census → Nominatim) on an ALREADY-CLEANED
+    address. Cleaning happens upstream in build_pins via addresslib, so this
+    receives the base address and only geocodes + caches it."""
+    key = f"{clean_addr}|||{city}"
     if key in cache and cache[key] is not None:
         return cache[key]
-    state      = _state_for(city)
-    clean_addr = _clean_address(address)
-
-    # Geocoder waterfall: Google → Census → Nominatim
     result = None
-    if GOOGLE_MAPS_KEY:
-        result = _geocode_google(clean_addr, city, state, GOOGLE_MAPS_KEY)
+    if google_key:
+        result = _geocode_google(clean_addr, city, state, google_key)
     if not result:
         result = _geocode_census(clean_addr, city, state)
     if not result:
         result = _geocode_nominatim(clean_addr, city, state)
     if not result:
-        print(f"    ⚠  No geocode result: {address}, {city}")
+        print(f"    ⚠  No geocode result: {clean_addr}, {city}")
     cache[key] = result
     return result
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  CITY META  (county + township lookup with Census fallback)
+#  CITY META  (county + township: curated table → coordinate reverse-lookup)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _load_city_meta_cache():
-    if CITY_META_CACHE_FILE.exists():
+def _load_city_meta_cache(city_meta_cache_file):
+    if city_meta_cache_file.exists():
         try:
-            with open(CITY_META_CACHE_FILE, encoding="utf-8") as f:
+            with open(city_meta_cache_file, encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             pass
     return {}
 
-def _save_city_meta_cache(cache):
-    CITY_META_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(CITY_META_CACHE_FILE, "w", encoding="utf-8") as f:
+def _save_city_meta_cache(cache, city_meta_cache_file):
+    city_meta_cache_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(city_meta_cache_file, "w", encoding="utf-8") as f:
         json.dump(cache, f, indent=2)
 
-def _fetch_city_meta_census(city, state):
-    """Query Census geographies endpoint for county + township of a city."""
+def _fetch_city_meta_coords(lat, lng):
+    """Reverse-lookup county + township from coordinates via the Census
+    geographies/coordinates endpoint (more reliable than forward-geocoding a
+    dummy street per city)."""
     try:
         params = urllib.parse.urlencode({
-            "street":    "1 Main St",
-            "city":      city,
-            "state":     state,
+            "x":         lng,
+            "y":         lat,
             "benchmark": "Public_AR_Current",
             "vintage":   "Current_Current",
             "layers":    "Counties,County Subdivisions",
             "format":    "json",
         })
-        url = (f"https://geocoding.geo.census.gov/geocoder/geographies/address?{params}")
+        url = f"https://geocoding.geo.census.gov/geocoder/geographies/coordinates?{params}"
         req = urllib.request.Request(url, headers={"User-Agent": NOMINATIM_UA})
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read())
-        matches = data.get("result", {}).get("addressMatches", [])
-        if not matches:
-            return ("", "")
-        geos     = matches[0].get("geographies", {})
-        counties = geos.get("Counties", [])
-        subdivs  = geos.get("County Subdivisions", [])
-        county   = counties[0]["NAME"].strip() if counties else ""
-        township = subdivs[0]["NAME"].strip()  if subdivs  else ""
-        if county and "County" not in county:
-            county = f"{county} County"
-        if township:
-            township = township.title()  # normalize "wayne township" → "Wayne Township"
-        return (county, township)
+        return addresslib.parse_census_geographies(data)
     except Exception as e:
-        print(f"    ⚠  Census city-meta lookup failed for {city}: {e}")
+        print(f"    ⚠  Census coord meta lookup failed for ({lat},{lng}): {e}")
         return ("", "")
 
-def get_city_meta(city, city_meta_cache):
-    """Return (county, township) for a city.
-    Priority: runtime cache → CITY_META hardcoded table → Census API.
-    """
+def get_city_meta(city, lat, lng, city_meta_cache):
+    """Return (county, township). Priority: curated CITY_META → coordinate
+    reverse-lookup (cached by rounded coord)."""
     key = city.upper()
-    if key in city_meta_cache:
-        entry = city_meta_cache[key]
-        return (entry[0], entry[1])
     if key in CITY_META:
-        result = CITY_META[key]
-        city_meta_cache[key] = list(result)
-        return result
-    # Unknown city — ask Census
-    state  = _state_for(city)
-    result = _fetch_city_meta_census(city, state)
+        return CITY_META[key]
+    coord_key = f"{round(lat, 4)},{round(lng, 4)}"
+    if coord_key in city_meta_cache:
+        entry = city_meta_cache[coord_key]
+        return (entry[0], entry[1])
+    result = _fetch_city_meta_coords(lat, lng)
     if result[0]:
         print(f"    ℹ  Census meta → {city}: {result[0]}, {result[1]}")
-    city_meta_cache[key] = list(result)
+    city_meta_cache[coord_key] = list(result)
     return result
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  BUILD ADDRESS LIST
+#  BUILD PINS  (testable seam: inject geocode_fn / meta_fn)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def build_address_list(rows, cache):
-    if not rows:
-        return []
-    keys     = list(rows[0].keys())
-    addr_col = next((k for k in keys if k.upper().strip() == "ADDRESS"), None)
-    city_col = next((k for k in keys if k.upper().strip() == "CITY"),    None)
-    if not addr_col or not city_col:
-        print(f"    ❌  ADDRESS or CITY column not found. Columns: {', '.join(keys)}")
-        return []
-    print(f"    Columns → address: {addr_col!r}   city: {city_col!r}")
-    city_meta_cache = _load_city_meta_cache()
-    out, new_count = [], 0
-    for row in rows:
-        address = str(row.get(addr_col, "")).strip()
-        city    = str(row.get(city_col, "")).strip()
+def build_pins(records, geocode_fn, meta_fn):
+    """Transform normalized sheet records into (pins, unplaced).
+
+    records: [{address, city, row_num}]
+    geocode_fn(clean_addr, city, state) -> {"lat","lng"} | None
+    meta_fn(city, lat, lng) -> (county, township)
+
+    The pin's displayed `address` is the FULL original string; only the
+    geocoder receives the stripped+cleaned base. Rows that fail geocoding go
+    to `unplaced` rather than being silently dropped.
+    """
+    pins, unplaced = [], []
+    for rec in records:
+        address = str(rec.get("address", "")).strip()
+        city    = str(rec.get("city", "")).strip()
         if not address or not city:
             continue
-        was_cached = f"{address}|||{city}" in cache
-        coord = geocode(address, city, cache)
+        state = addresslib.state_for(city)
+        base, unit = addresslib.parse_unit(address)
+        clean = addresslib.clean_address_for_geocoding(base)
+        coord = geocode_fn(clean, city, state)
         if not coord:
+            unplaced.append({"address": address, "city": city, "row_num": rec.get("row_num")})
             continue
-        if not was_cached:
-            new_count += 1
-        county, township = get_city_meta(city, city_meta_cache)
-        maps_url = ("https://maps.google.com/?q="
-                    + urllib.parse.quote_plus(f"{address}, {city}"))
-        out.append({
+        county, township = meta_fn(city, coord["lat"], coord["lng"])
+        pins.append({
             "address":  address,
             "city":     city,
+            "state":    state,
+            "unit":     unit,
             "county":   county,
             "township": township,
             "lat":      coord["lat"],
             "lng":      coord["lng"],
-            "maps_url": maps_url,
-            "row_num":  row.get("_row_num"),
+            "maps_url": "https://maps.google.com/?q=" + urllib.parse.quote_plus(f"{address}, {city}"),
+            "row_num":  rec.get("row_num"),
         })
-    _save_city_meta_cache(city_meta_cache)
-    print(f"    {len(out)} addresses ready  ({new_count} newly geocoded)")
-    return out
+    pins = addresslib.dedupe(pins)
+    pins = addresslib.destack(pins)
+    return pins, unplaced
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  HTML GENERATION
 # ══════════════════════════════════════════════════════════════════════════════
 
-def generate_html(tab_name, addresses, template):
-    html = template
-    html = html.replace("{{TAB_NAME}}",       tab_name)
-    html = html.replace("{{ADDRESSES_JSON}}", json.dumps(addresses, indent=2, ensure_ascii=False))
+def generate_html(tab_name, pins, unplaced, template):
+    pins_json     = addresslib.escape_json_for_html(json.dumps(pins, indent=2, ensure_ascii=False))
+    unplaced_json = addresslib.escape_json_for_html(json.dumps(unplaced, indent=2, ensure_ascii=False))
+    html = template.replace("{{TAB_NAME}}", tab_name)
+    html = html.replace("{{ADDRESSES_JSON}}", pins_json)
+    html = html.replace("{{UNPLACED_JSON}}", unplaced_json)
     return html
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  METADATA
 # ══════════════════════════════════════════════════════════════════════════════
 
-def write_metadata(tab_counts):
+def write_metadata(tab_counts, tab_unplaced, output_dir):
     meta = {
         "last_updated": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
         "last_updated_display": datetime.now().strftime("%B %d, %Y at %I:%M %p"),
         "tabs": tab_counts,
+        "unplaced": tab_unplaced,
     }
-    meta_file = OUTPUT_DIR / "metadata.json"
+    meta_file = output_dir / "metadata.json"
     meta_file.write_text(json.dumps(meta, indent=2), encoding="utf-8")
-    print(f"  ✅  Wrote metadata.json")
+    print("  ✅  Wrote metadata.json")
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  GITHUB PUSH
 # ══════════════════════════════════════════════════════════════════════════════
 
-def push_to_github():
+def push_to_github(repo_path):
     print("\n  Pushing to GitHub Pages…")
     date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     try:
         subprocess.run(
-            ["git", "-C", str(REPO_PATH), "add", "docs/"],
+            ["git", "-C", str(repo_path), "add", "docs/"],
             check=True, capture_output=True
         )
         result = subprocess.run(
-            ["git", "-C", str(REPO_PATH), "commit", "-m", f"Auto-update maps {date_str}"],
+            ["git", "-C", str(repo_path), "commit", "-m", f"Auto-update maps {date_str}"],
             capture_output=True, text=True
         )
         if "nothing to commit" in result.stdout:
             print("  ℹ  No changes to push (maps unchanged).")
             return
         subprocess.run(
-            ["git", "-C", str(REPO_PATH), "push"],
+            ["git", "-C", str(repo_path), "push"],
             check=True, capture_output=True
         )
         print("  ✅  Maps pushed to GitHub Pages.")
@@ -549,8 +521,9 @@ def main():
     print("  Proximity Mesh Address Map — Sync")
     print("═══════════════════════════════════════\n")
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    settings = load_settings()
+    settings["output_dir"].mkdir(parents=True, exist_ok=True)
+    settings["cache_dir"].mkdir(parents=True, exist_ok=True)
 
     if not TEMPLATE_FILE.exists():
         sys.exit(
@@ -559,49 +532,74 @@ def main():
         )
 
     template = TEMPLATE_FILE.read_text(encoding="utf-8")
-    cache    = load_cache()
+    cache    = load_cache(settings["cache_file"])
     print(f"  Geocode cache: {len(cache)} entries loaded")
 
     print("  Connecting to Google Sheets…")
-    spreadsheet = open_spreadsheet()
+    spreadsheet = open_spreadsheet(settings)
     print(f"  Connected: {spreadsheet.title}\n")
 
-    tab_counts = {}
+    city_meta_cache = _load_city_meta_cache(settings["city_meta_cache_file"])
+    tab_counts, tab_unplaced = {}, {}
 
-    for tab_name, gid in TABS.items():
+    for tab_name, gid in settings["tabs"].items():
         bar = "─" * max(1, 36 - len(tab_name))
         print(f"── {tab_name} {bar}")
         try:
-            rows = fetch_tab(spreadsheet, gid)
+            rows = fetch_tab(spreadsheet, gid, settings["spreadsheet_id"])
         except Exception as e:
             print(f"    ❌  Could not read tab: {e}\n")
             continue
         print(f"    {len(rows)} rows fetched")
-        addresses = build_address_list(rows, cache)
-        save_cache(cache)
-        if not addresses:
-            print("    Skipping — no valid addresses.\n")
+        if not rows:
+            print("    Skipping — empty tab.\n")
             continue
-        tab_counts[tab_name] = len(addresses)
+
+        keys     = list(rows[0].keys())
+        addr_col = next((k for k in keys if k.upper().strip() == "ADDRESS"), None)
+        city_col = next((k for k in keys if k.upper().strip() == "CITY"),    None)
+        if not addr_col or not city_col:
+            print(f"    ❌  ADDRESS or CITY column not found. Columns: {', '.join(keys)}\n")
+            continue
+        print(f"    Columns → address: {addr_col!r}   city: {city_col!r}")
+        records = [{"address": r.get(addr_col, ""), "city": r.get(city_col, ""),
+                    "row_num": r.get("_row_num")} for r in rows]
+
+        def geocode_fn(clean, city, state, _key=settings["google_key"], _cache=cache):
+            return geocode_clean(clean, city, state, _key, _cache)
+
+        def meta_fn(city, lat, lng, _cache=city_meta_cache):
+            return get_city_meta(city, lat, lng, _cache)
+
+        pins, unplaced = build_pins(records, geocode_fn, meta_fn)
+        save_cache(cache, settings["cache_file"])
+        _save_city_meta_cache(city_meta_cache, settings["city_meta_cache_file"])
+
+        tab_unplaced[tab_name] = len(unplaced)
+        print(f"    {len(pins)} pins ready, {len(unplaced)} unplaced")
+        if not pins:
+            print("    Skipping — no geocoded addresses.\n")
+            continue
+        tab_counts[tab_name] = len(pins)
         safe_name = (tab_name.lower()
                      .replace(" ", "-")
                      .replace("/", "-")
                      .replace("--", "-"))
-        out_file = OUTPUT_DIR / f"map-{safe_name}.html"
-        out_file.write_text(generate_html(tab_name, addresses, template), encoding="utf-8")
+        out_file = settings["output_dir"] / f"map-{safe_name}.html"
+        out_file.write_text(generate_html(tab_name, pins, unplaced, template), encoding="utf-8")
         print(f"    ✅  Saved → docs/{out_file.name}\n")
 
-    write_metadata(tab_counts)
+    write_metadata(tab_counts, tab_unplaced, settings["output_dir"])
 
     # In GitHub Actions, the workflow handles the commit/push — skip it here.
-    if AUTO_PUSH and not IN_CI:
-        push_to_github()
+    if settings["auto_push"] and not IN_CI:
+        push_to_github(settings["repo_path"])
 
     print("\n═══════════════════════════════════════")
     print("  Done!")
     if IN_CI:
         print("  Running in CI — workflow will commit & push.")
-    elif AUTO_PUSH:
+    elif settings["auto_push"]:
         print("  Maps are live at your GitHub Pages URL.")
     else:
         print("  Run: git push   to publish to GitHub Pages.")
