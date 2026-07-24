@@ -15,3 +15,10 @@ __pycache__/
 # docs/map-*.html  ← intentionally tracked
 # docs/metadata.json  ← intentionally tracked
 # docs/index.html  ← intentionally tracked
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
