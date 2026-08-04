@@ -1,10 +1,12 @@
 {
-  "last_updated": "2026-08-04T16:10:10",
-  "last_updated_display": "August 04, 2026 at 04:10 PM",
+  "last_updated": "2026-08-04T18:25:57",
+  "last_updated_display": "August 04, 2026 at 06:25 PM",
   "tabs": {
-    "BURY / DWB": 255
+    "TEMPORARY LOCATES": 358,
+    "BURY / DWB": 254
   },
   "unplaced": {
+    "TEMPORARY LOCATES": 0,
     "BURY / DWB": 0
   }
 }
